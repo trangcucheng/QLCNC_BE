@@ -1,0 +1,22 @@
+import { MigrationInterface, QueryRunner } from "typeorm";
+
+export class ChangeUserIdToStringSimple1759500000002 implements MigrationInterface {
+    name = 'ChangeUserIdToStringSimple1759500000002'
+
+    public async up(queryRunner: QueryRunner): Promise<void> {
+        // Chỉ update zalo_accounts vì đã thành công đổi user table rồi
+        console.log('Updating zalo_accounts foreign key references...');
+        
+        // Clear existing foreign key data để tránh lỗi reference
+        await queryRunner.query(`
+            UPDATE zalo_accounts SET user_id = NULL WHERE user_id IS NOT NULL
+        `);
+        
+        console.log('Migration completed successfully');
+    }
+
+    public async down(queryRunner: QueryRunner): Promise<void> {
+        console.log('Reverting changes...');
+        // Revert logic if needed
+    }
+}

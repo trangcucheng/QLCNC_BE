@@ -1,0 +1,28 @@
+version: 0.2
+phases:
+  pre_build:
+    commands:
+    - echo Logging in to Amazon ECR...
+    - aws --version
+    #- aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+    - aws ecr get-login-password --region ap-northeast-1 | docker login --username AWS --password-stdin 718056608735.dkr.ecr.ap-northeast-1.amazonaws.com
+    - export COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-8)
+    - export IMAGE_TAG=${COMMIT_HASH}
+    - export REPOSITORY_URI="718056608735.dkr.ecr.ap-northeast-1.amazonaws.com/stg-sleefi-api"
+    - export ENV_FOR=${ENV_FOR}
+  build:
+    commands:
+    - echo Build started on `date` at commitID ${COMMIT_HASH}
+    - echo Building the Docker image...
+    - docker build -t $REPOSITORY_URI:latest .
+    - docker tag $REPOSITORY_URI:latest $REPOSITORY_URI:$IMAGE_TAG
+  post_build:
+    commands:
+    - echo Build completed on `date`
+    - echo pushing to repo
+    - docker push $REPOSITORY_URI:latest
+    - docker push $REPOSITORY_URI:$IMAGE_TAG
+    - echo Writing image definitions file with IMAGE_TAG ${IMAGE_TAG}
+    - printf '[{"name":"sleefi-api","imageUri":"%s"}]' $REPOSITORY_URI:$IMAGE_TAG > sleefi_api.json
+artifacts:
+    files: sleefi_api.json

@@ -1,0 +1,1011 @@
+import { HttpService } from '@nestjs/axios';
+import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
+import { InjectRepository } from '@nestjs/typeorm';
+import axios from 'axios';
+import { randomUUID } from 'crypto';
+import * as crypto from 'crypto';
+import * as CryptoJS from 'crypto-js';
+import { firstValueFrom } from 'rxjs';
+import { Repository } from 'typeorm';
+
+import { User } from '../../databases/entities/user.entity';
+import { ZaloUser } from '../../databases/entities/ZaloUser.entity';
+import { ZaloAuthResponseDto, ZaloLoginDto, ZaloUserInfoDto } from './dto/zalo-auth.dto';
+import { ZaloTokenService } from './zalo-token.service';
+@Injectable()
+export class ZaloService {
+  private readonl    // 📋 Trả về luô    // 📋 Trả về luôn để admin copy dễ dàng
+    return {
+      success: true,
+      message: 'Copy 2 giá trị này vào Zalo Developer',
+      data: {
+        state,
+        code_challenge: codeChallenge
+      },
+      // Thông tin bổ sung (optional)
+      info: {
+        code_challenge_method: 'S256',
+        redirect_uri: this.redirectUri,
+        app_id: this.appId,
+        instruction: 'Paste STATE và CODE_CHALLENGE vào form Zalo Developer'
+      },
+      // 🔍 Debug info (để xem code_verifier)
+      debug: {
+        code_verifier: codeVerifier,
+        map_size: this.codeVerifierMap.size
+      }
+    };
+  }
+
+  // 🔹 B2: Đổi code lấy access_token
+  async exchangeToken(code: string, state: string) {
+    console.log('🔍 Debug exchangeToken:', { code, state, mapSize: this.codeVerifierMap.size });
+    console.log('🔍 Available states:', Array.from(this.codeVerifierMap.keys()));
+
+    const codeVerifier = this.codeVerifierMap.get(state);
+    if (!codeVerifier) {
+      console.error('❌ Invalid state:', { state, availableStates: Array.from(this.codeVerifierMap.keys()) });
+      throw new Error(`Invalid state: ${state}. Available states: ${Array.from(this.codeVerifierMap.keys()).join(', ')}`);
+    }
+
+    const body = new URLSearchParams({
+      app_id: this.appId,
+      grant_type: 'authorization_code',
+      code,
+      code_verifier: codeVerifier,
+      redirect_uri: this.redirectUri,
+      app_secret: this.appSecret,
+    });
+
+    const response = await firstValueFrom(
+      this.http.post('https://oauth.zaloapp.com/v4/oa/access_token', body.toString(), {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      }),
+    );
+    const data = (response as any).data;
+
+    await this.tokenService.saveToken(data);
+    return { message: 'Lấy access_token thành công', data };
+  }
+
+  // 🔹 B3: Làm mới token
+  async refreshToken() {
+    const token = await this.tokenService.getToken();
+    if (!token?.refresh_token) throw new Error('Chưa có refresh_token');
+
+    const body = new URLSearchParams({
+      app_id: this.appId,
+      grant_type: 'refresh_token',
+      refresh_token: token.refresh_token,
+      app_secret: this.appSecret,
+    });
+
+    const response = await firstValueFrom(
+      this.http.post('https://oauth.zaloapp.com/v4/oa/access_token', body.toString(), {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      }),
+    );
+    const data = (response as any).data;
+
+    await this.tokenService.saveToken(data);
+    return { message: 'Refresh thành công', data };
+  }
+}
+  private readonly zaloAppSecret: string;
+  private readonly zaloOAuthUrl: string;
+  private readonly zaloGraphApiUrl: string;
+  private readonly appId = process.env.ZALO_OA_ID;
+  private readonly appSecret = process.env.ZALO_OA_SECRET;
+  private readonly redirectUri = process.env.ZALO_REDIRECT_URI;
+  private codeVerifierMap = new Map<string, string>();
+  constructor(
+    @InjectRepository(ZaloUser)
+    private readonly zaloUserRepository: Repository<ZaloUser>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+    private readonly http: HttpService,
+    private readonly tokenService: ZaloTokenService,
+  ) {
+    this.zaloAppId = (configService.get<string>('ZALO_APP_ID') || process.env.ZALO_APP_ID || '').trim();
+    this.zaloAppSecret = (configService.get<string>('ZALO_APP_SECRET') || process.env.ZALO_APP_SECRET || '').trim();
+    this.zaloOAuthUrl = configService.get<string>('ZALO_API_URL') || process.env.ZALO_API_URL || 'https://oauth.zaloapp.com/v4';
+    this.zaloGraphApiUrl = configService.get<string>('ZALO_GRAPH_API_URL') || process.env.ZALO_GRAPH_API_URL || 'https://graph.zalo.me/v2.0';
+
+    console.log('Zalo Config:', {
+      appId: this.zaloAppId ? this.zaloAppId.substring(0, 5) + '...' : 'NOT_SET',
+      appSecret: this.zaloAppSecret ? this.zaloAppSecret.substring(0, 5) + '...' : 'NOT_SET',
+      oauthUrl: this.zaloOAuthUrl,
+      graphApiUrl: this.zaloGraphApiUrl,
+      appIdLength: this.zaloAppId?.length,
+      appSecretLength: this.zaloAppSecret?.length,
+      // Debug: kiểm tra source của config
+      configSource: {
+        fromConfigService: configService.get<string>('ZALO_APP_SECRET') ? 'YES' : 'NO',
+        fromProcessEnv: process.env.ZALO_APP_SECRET ? 'YES' : 'NO',
+        secretLastChars: this.zaloAppSecret ? '...' + this.zaloAppSecret.slice(-4) : 'NOT_SET'
+      }
+    });
+
+    // Validate config
+    if (!this.zaloAppId || !this.zaloAppSecret) {
+      console.error('❌ ZALO_APP_ID hoặc ZALO_APP_SECRET không được cấu hình!');
+    }
+  }
+
+  /**
+   * Xác thực người dùng qua Zalo Mini App
+   */
+  async authenticateZaloUser(loginDto: ZaloLoginDto): Promise<ZaloAuthResponseDto> {
+    try {
+      let zaloAccessToken = null;
+
+      // 1. Thử code trước (ưu tiên code vì nó fresh hơn)
+      if (loginDto.code) {
+        try {
+          zaloAccessToken = await this.exchangeCodeForAccessToken(loginDto.code);
+        } catch (codeError) {
+          console.log('Đổi code thất bại, thử dùng accessToken:', codeError.message);
+        }
+      }
+
+      // 2. Nếu code không thành công, thử accessToken
+      if (!zaloAccessToken && loginDto.accessToken) {
+        zaloAccessToken = loginDto.accessToken;
+      }
+
+      if (!zaloAccessToken) {
+        throw new BadRequestException('Cần có access token hoặc authorization code hợp lệ');
+      }
+
+      // 2. Verify access token với Zalo và lấy user info
+      const zaloUserInfo = await this.getZaloUserInfo(zaloAccessToken);
+
+      // 2. Tìm hoặc tạo ZaloUser trong database
+      let zaloUser = await this.zaloUserRepository.findOne({
+        where: { zaloId: zaloUserInfo.zaloId },
+        relations: ['user']
+      });
+
+      if (!zaloUser) {
+        zaloUser = await this.createZaloUser(zaloUserInfo);
+      } else {
+        // Cập nhật thông tin mới nhất
+        await this.updateZaloUser(zaloUser, zaloUserInfo);
+      }
+
+      // 3. Tạo JWT token
+      const payload = {
+        sub: zaloUser.zaloId,           // ← Sửa: dùng zaloId thay vì systemUserId
+        zaloId: zaloUser.zaloId,
+        userId: zaloUser.user?.id,      // ← Thêm: systemUserId riêng biệt
+        name: zaloUser.name,
+        phone: zaloUser.phone,
+        type: 'zalo'
+      };
+
+      const accessToken = this.jwtService.sign(payload, {
+        secret: this.configService.get<string>('ZALO_JWT_SECRET') || 'zalo-secret-key',
+        expiresIn: '24h'
+      });
+
+      return {
+        accessToken,
+        user: {
+          id: zaloUser.user?.id || zaloUser.id.toString(),
+          zaloId: zaloUser.zaloId,
+          name: zaloUser.name,
+          phone: zaloUser.phone,
+          avatar: zaloUser.avatar
+        },
+        expiresIn: 86400 // 24 hours
+      };
+
+    } catch (error) {
+      throw new UnauthorizedException('Xác thực Zalo thất bại: ' + error.message);
+    }
+  }
+
+  /**
+   * Đổi authorization code lấy access token
+   */
+  private async exchangeCodeForAccessToken(code: string): Promise<string> {
+    try {
+      console.log('Đổi code thành token:', {
+        app_id: this.zaloAppId,
+        app_secret: this.zaloAppSecret ? this.zaloAppSecret.substring(0, 5) + '...' : 'NOT_SET',
+        code: code.substring(0, 10) + '...',
+        grant_type: 'authorization_code',
+        url: `${this.zaloOAuthUrl}/access_token`
+      });
+
+      console.log('Secret debug:', {
+        length: this.zaloAppSecret.length,
+        firstChar: this.zaloAppSecret.charAt(0),
+        lastChar: this.zaloAppSecret.charAt(this.zaloAppSecret.length - 1),
+        hasSpaces: this.zaloAppSecret.includes(' ')
+      });
+
+      let response;
+
+      // Method 1: Thử GET request
+      try {
+        const getUrl = `${this.zaloOAuthUrl}/access_token?app_id=${encodeURIComponent(this.zaloAppId)}&app_secret=${encodeURIComponent(this.zaloAppSecret)}&code=${encodeURIComponent(code)}&grant_type=authorization_code`;
+        console.log('Trying GET method...');
+
+        response = await axios.get(getUrl);
+        console.log('GET method success!');
+      } catch (getError) {
+        console.log('GET method failed, trying POST URLEncoded...');
+
+        // Method 2: POST với URLSearchParams
+        try {
+          const params = new URLSearchParams();
+          params.append('app_id', this.zaloAppId);
+          params.append('app_secret', this.zaloAppSecret);
+          params.append('code', code);
+          params.append('grant_type', 'authorization_code');
+
+          console.log('Request params:', params.toString());
+
+          response = await axios.post(`${this.zaloOAuthUrl}/access_token`, params, {
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded'
+            }
+          });
+          console.log('POST URLEncoded success!');
+        } catch (urlEncodedError) {
+          console.log('URLEncoded failed, trying JSON format...');
+
+          // Method 3: POST với JSON
+          const jsonData = {
+            app_id: this.zaloAppId,
+            app_secret: this.zaloAppSecret,
+            code: code,
+            grant_type: 'authorization_code'
+          };
+
+          response = await axios.post(`${this.zaloOAuthUrl}/access_token`, jsonData, {
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+          console.log('POST JSON success!');
+        }
+      }
+
+      console.log('Zalo OAuth Response:', JSON.stringify(response.data, null, 2));
+
+      if (response.data.error) {
+        throw new UnauthorizedException(`Zalo OAuth error: ${response.data.error} - ${response.data.error_description}`);
+      }
+
+      if (!response.data.access_token) {
+        throw new UnauthorizedException('Không nhận được access token từ Zalo');
+      }
+
+      return response.data.access_token;
+    } catch (error) {
+      console.error('Exchange code error:', error.response?.data || error.message);
+
+      if (axios.isAxiosError(error)) {
+        const errorMsg = error.response?.data?.error_description || error.response?.data?.message || 'Lỗi kết nối Zalo OAuth';
+        throw new UnauthorizedException(`Không thể đổi authorization code: ${errorMsg}`);
+      }
+      throw new UnauthorizedException(`Không thể đổi authorization code: ${error.message}`);
+    }
+  }
+
+  /**
+   * Lấy thông tin user từ Zalo API
+   */
+  private async getZaloUserInfo(accessToken: string): Promise<ZaloUserInfoDto> {
+    try {
+      console.log('Gọi Zalo API với token:', accessToken.substring(0, 10) + '...');
+
+      const response = await axios.get(`${this.zaloGraphApiUrl}/me`, {
+        headers: {
+          'access_token': accessToken
+        }
+      });
+
+      console.log('Zalo API Response:', JSON.stringify(response.data, null, 2));
+
+      if (response.data.error) {
+        throw new BadRequestException(`Token Zalo không hợp lệ: ${response.data.error} - ${response.data.message || response.data.error_description}`);
+      }
+
+      // Zalo API trả về direct object, không có nested data field
+      const userData = response.data;
+
+      if (!userData || !userData.id) {
+        throw new BadRequestException('Không lấy được thông tin user từ Zalo API');
+      }
+
+      return {
+        zaloId: userData.id,
+        name: userData.name || 'Người dùng Zalo',
+        phone: userData.phone || null, // Zalo thường không trả phone
+        avatar: userData.picture?.data?.url || userData.avatar || null
+      };
+
+    } catch (error) {
+      console.error('Zalo API Error:', error.response?.data || error.message);
+
+      if (axios.isAxiosError(error)) {
+        const errorMsg = error.response?.data?.message || error.response?.data?.error_description || 'Không thể kết nối đến Zalo API';
+        throw new BadRequestException(`Zalo API Error: ${errorMsg}`);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Tạo ZaloUser mới và tự động tạo User hệ thống
+   */
+  private async createZaloUser(userInfo: ZaloUserInfoDto): Promise<ZaloUser> {
+    // 1. Tạo User hệ thống trước
+    const systemUser = this.userRepository.create({
+      identity: `zalo_${userInfo.zaloId}`,
+      email: `zalo_${userInfo.zaloId}@zalo.local`,
+      fullName: userInfo.name,
+      roleId: 1, // Default role
+      isActive: 1,
+      passWord: 'zalo_generated', // Dummy password
+      phoneNumber: userInfo.phone || `zalo_${userInfo.zaloId}`
+    });
+    systemUser.id = randomUUID();
+    const savedSystemUser = await this.userRepository.save(systemUser);
+
+    // 2. Tạo ZaloUser và link với systemUser
+    const zaloUser = this.zaloUserRepository.create({
+      zaloId: userInfo.zaloId,
+      name: userInfo.name,
+      phone: userInfo.phone,
+      avatar: userInfo.avatar,
+      lastLoginAt: new Date(),
+      isActive: true,
+      userId: savedSystemUser.id,
+      user: savedSystemUser
+    });
+
+    return await this.zaloUserRepository.save(zaloUser);
+  }
+
+  /**
+   * Cập nhật thông tin ZaloUser
+   */
+  private async updateZaloUser(zaloUser: ZaloUser, userInfo: ZaloUserInfoDto): Promise<ZaloUser> {
+    zaloUser.name = userInfo.name;
+    zaloUser.phone = userInfo.phone || zaloUser.phone;
+    zaloUser.avatar = userInfo.avatar || zaloUser.avatar;
+    zaloUser.lastLoginAt = new Date();
+
+    return await this.zaloUserRepository.save(zaloUser);
+  }
+
+  /**
+   * Liên kết ZaloUser với User hệ thống
+   */
+  async linkZaloUserWithSystemUser(zaloId: string, systemUserId: string): Promise<ZaloUser> {
+    const zaloUser = await this.zaloUserRepository.findOne({
+      where: { zaloId }
+    });
+
+    if (!zaloUser) {
+      throw new BadRequestException('Không tìm thấy người dùng Zalo');
+    }
+
+    const systemUser = await this.userRepository.findOne({
+      where: { id: systemUserId }
+    });
+
+    if (!systemUser) {
+      throw new BadRequestException('Không tìm thấy người dùng hệ thống');
+    }
+
+    zaloUser.userId = systemUserId;
+    return await this.zaloUserRepository.save(zaloUser);
+  }
+
+  /**
+   * Lấy danh sách ZaloUser
+   */
+  async getZaloUsers(): Promise<ZaloUser[]> {
+    return await this.zaloUserRepository.find({
+      relations: ['user'],
+      order: { createdAt: 'DESC' }
+    });
+  }
+
+  /**
+   * Verify Zalo signature (cho webhook)
+   */
+  verifyZaloSignature(body: string, signature: string): boolean {
+    const expectedSignature = CryptoJS.HmacSHA256(body, this.zaloAppSecret).toString();
+    return expectedSignature === signature;
+  }
+
+  /**
+   * Debug Zalo configuration
+   */
+  async debugConfig(): Promise<any> {
+    return {
+      appId: {
+        value: this.zaloAppId,
+        length: this.zaloAppId?.length,
+        fromEnv: process.env.ZALO_APP_ID,
+        fromConfig: this.configService.get<string>('ZALO_APP_ID')
+      },
+      appSecret: {
+        value: this.zaloAppSecret ? this.zaloAppSecret.substring(0, 8) + '...' : 'NOT_SET',
+        length: this.zaloAppSecret?.length,
+        fromEnv: process.env.ZALO_APP_SECRET ? process.env.ZALO_APP_SECRET.substring(0, 8) + '...' : 'NOT_SET',
+        fromConfig: this.configService.get<string>('ZALO_APP_SECRET') ? this.configService.get<string>('ZALO_APP_SECRET').substring(0, 8) + '...' : 'NOT_SET'
+      },
+      urls: {
+        oauth: this.zaloOAuthUrl,
+        graphApi: this.zaloGraphApiUrl
+      },
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  /**
+   * Debug ZaloUser info
+   */
+  async debugZaloUser(zaloId: string): Promise<any> {
+    const zaloUser = await this.zaloUserRepository.findOne({
+      where: { zaloId },
+      relations: ['user']
+    });
+
+    if (!zaloUser) {
+      return {
+        found: false,
+        message: 'ZaloUser không tồn tại',
+        zaloId: zaloId
+      };
+    }
+
+    let systemUser = null;
+    if (zaloUser.userId) {
+      systemUser = await this.userRepository.findOne({
+        where: { id: zaloUser.userId }
+      });
+    }
+
+    return {
+      found: true,
+      zaloUser: {
+        id: zaloUser.id,
+        zaloId: zaloUser.zaloId,
+        name: zaloUser.name,
+        phone: zaloUser.phone,
+        userId: zaloUser.userId,
+        isActive: zaloUser.isActive,
+        createdAt: zaloUser.createdAt,
+        lastLoginAt: zaloUser.lastLoginAt
+      },
+      systemUser: systemUser ? {
+        id: systemUser.id,
+        email: systemUser.email,
+        fullName: systemUser.fullName,
+        organizationId: systemUser.organizationId,
+        roleId: systemUser.roleId,
+        isActive: systemUser.isActive
+      } : null,
+      hasSystemUserMapping: !!systemUser,
+      canAuthenticate: !!systemUser
+    };
+  }
+
+  /**
+   * Debug JWT token
+   */
+  async debugToken(token: string): Promise<any> {
+    try {
+      const decoded = this.jwtService.verify(token, {
+        secret: this.configService.get<string>('ZALO_JWT_SECRET') || 'zalo-secret-key'
+      });
+
+      return {
+        success: true,
+        decoded: decoded,
+        secret: this.configService.get<string>('ZALO_JWT_SECRET') ? 'SET' : 'NOT_SET',
+        fallback: 'zalo-secret-key'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message,
+        secret: this.configService.get<string>('ZALO_JWT_SECRET') ? 'SET' : 'NOT_SET',
+        fallback: 'zalo-secret-key'
+      };
+    }
+  }
+
+  /**
+   * Generate test JWT token for development
+   */
+  async generateTestToken(): Promise<ZaloAuthResponseDto> {
+    // Tạo hoặc tìm test user
+    let testZaloUser = await this.zaloUserRepository.findOne({
+      where: { zaloId: 'test_zalo_id_123' },
+      relations: ['user']
+    });
+
+    if (!testZaloUser) {
+      // Tạo test user trong bảng users trước
+      const testSystemUser = await this.userRepository.findOne({
+        where: { email: 'test@zalo.local' }
+      });
+
+      let systemUser = testSystemUser;
+      if (!systemUser) {
+        systemUser = this.userRepository.create({
+          identity: 'test_identity',
+          email: 'test@zalo.local',
+          fullName: 'Test Zalo User',
+          roleId: 1,
+          isActive: 1,
+          passWord: 'test123',
+          phoneNumber: '0123456789'
+        });
+        systemUser.id = randomUUID();
+        systemUser = await this.userRepository.save(systemUser);
+      }
+
+      // Tạo test ZaloUser
+      testZaloUser = this.zaloUserRepository.create({
+        zaloId: 'test_zalo_id_123',
+        name: 'Test Zalo User',
+        avatar: 'https://via.placeholder.com/150',
+        userId: systemUser.id,
+        user: systemUser
+      });
+      testZaloUser = await this.zaloUserRepository.save(testZaloUser);
+    }
+
+    // Tạo JWT payload
+    const payload = {
+      zaloId: testZaloUser.zaloId,
+      userId: testZaloUser.userId,
+      name: testZaloUser.name,
+      sub: testZaloUser.zaloId
+    };
+
+    // Generate JWT token
+    const accessToken = this.jwtService.sign(payload, {
+      secret: this.configService.get<string>('ZALO_JWT_SECRET') || 'zalo-secret-key',
+      expiresIn: '7d'
+    });
+
+    return {
+      accessToken,
+      user: {
+        id: testZaloUser.userId,
+        zaloId: testZaloUser.zaloId,
+        name: testZaloUser.name,
+        avatar: testZaloUser.avatar
+      },
+      expiresIn: 604800 // 7 days
+    };
+  }
+
+  async forceLinkZaloUser(zaloId: string) {
+    console.log('🔧 Force link ZaloUser:', zaloId);
+
+    // Tìm ZaloUser
+    const zaloUser = await this.zaloUserRepository.findOne({
+      where: { zaloId: zaloId }
+    });
+
+    if (!zaloUser) {
+      throw new NotFoundException('ZaloUser không tồn tại');
+    }
+
+    console.log('✅ Tìm thấy ZaloUser:', zaloUser);
+
+    // Nếu đã có userId rồi thì không cần tạo nữa
+    if (zaloUser.userId) {
+      return {
+        success: true,
+        message: 'ZaloUser đã được link với User hệ thống',
+        zaloUser,
+        userId: zaloUser.userId
+      };
+    }
+
+    // Tạo User hệ thống mới
+    const systemUser = this.userRepository.create({
+      fullName: zaloUser.name || `User-${zaloId}`,
+      phoneNumber: zaloUser.phone,
+      isActive: 1,
+      passWord: 'zalo_generated',
+      roleId: 1
+    });
+
+    const savedUser = await this.userRepository.save(systemUser);
+    console.log('✅ Đã tạo User hệ thống:', savedUser);
+
+    // Update ZaloUser với userId mới
+    zaloUser.userId = savedUser.id;
+    await this.zaloUserRepository.save(zaloUser);
+
+    console.log('✅ Đã link ZaloUser với User hệ thống:', {
+      zaloUserId: zaloUser.id,
+      systemUserId: savedUser.id
+    });
+
+    return {
+      success: true,
+      message: 'Đã tạo và link thành công',
+      zaloUser,
+      systemUser: savedUser
+    };
+  }
+
+  async getUnlinkedZaloUsers() {
+    const unlinkedUsers = await this.zaloUserRepository.find({
+      where: { userId: null },
+      order: { createdAt: 'DESC' }
+    });
+
+    return {
+      success: true,
+      data: unlinkedUsers,
+      total: unlinkedUsers.length,
+      message: `Có ${unlinkedUsers.length} ZaloUser chưa được link`
+    };
+  }
+
+  async adminLinkUsers(zaloUserId: string, systemUserId: string) {
+    // Tìm ZaloUser
+    const zaloUser = await this.zaloUserRepository.findOne({
+      where: { id: parseInt(zaloUserId) }
+    });
+
+    if (!zaloUser) {
+      throw new NotFoundException('ZaloUser không tồn tại');
+    }
+
+    // Tìm User hệ thống
+    const systemUser = await this.userRepository.findOne({
+      where: { id: systemUserId }
+    });
+
+    if (!systemUser) {
+      throw new NotFoundException('User hệ thống không tồn tại');
+    }
+
+    // Link
+    zaloUser.userId = systemUserId;
+    await this.zaloUserRepository.save(zaloUser);
+
+    return {
+      success: true,
+      message: 'Link thành công',
+      data: {
+        zaloUser: {
+          id: zaloUser.id,
+          zaloId: zaloUser.zaloId,
+          name: zaloUser.name
+        },
+        systemUser: {
+          id: systemUser.id,
+          fullName: systemUser.fullName,
+          phoneNumber: systemUser.phoneNumber
+        }
+      }
+    };
+  }
+
+  /**
+   * Tự động match ZaloUser với User existing dựa trên tên tương tự
+   */
+  async autoMatchByName(zaloUserId: string) {
+    const zaloUser = await this.zaloUserRepository.findOne({
+      where: { id: parseInt(zaloUserId) }
+    });
+
+    if (!zaloUser || zaloUser.userId) {
+      return { success: false, message: 'ZaloUser không tồn tại hoặc đã được link' };
+    }
+
+    // Tìm Users có tên tương tự
+    const similarUsers = await this.userRepository.createQueryBuilder('user')
+      .where('user.fullName LIKE :name', { name: `%${zaloUser.name}%` })
+      .orWhere(':zaloName LIKE CONCAT("%", user.fullName, "%")', { zaloName: zaloUser.name })
+      .getMany();
+
+    return {
+      success: true,
+      zaloUser,
+      suggestedUsers: similarUsers.map(u => ({
+        id: u.id,
+        fullName: u.fullName,
+        phoneNumber: u.phoneNumber,
+        organizationId: u.organizationId
+      })),
+      message: `Tìm thấy ${similarUsers.length} User có tên tương tự`
+    };
+  }
+
+  // ==================== AUTO LINK METHODS ====================
+
+  /**
+   * Tự động liên kết tài khoản Zalo với User hệ thống dựa trên SĐT
+   */
+  async autoLinkAccount(zaloId: string, linkDto: { phone?: string; email?: string; identity?: string }) {
+    try {
+      // 1. Tìm ZaloUser
+      const zaloUser = await this.zaloUserRepository.findOne({
+        where: { zaloId },
+        relations: ['user']
+      });
+
+      if (!zaloUser) {
+        throw new BadRequestException('Không tìm thấy người dùng Zalo');
+      }
+
+      // 2. Nếu đã liên kết rồi thì return
+      if (zaloUser.userId) {
+        return {
+          linked: true,
+          user: zaloUser.user,
+          message: 'Tài khoản đã được liên kết từ trước'
+        };
+      }
+
+      let systemUser = null;
+
+      // 3. Tìm User hệ thống theo SĐT (ưu tiên)
+      if (linkDto.phone) {
+        systemUser = await this.userRepository.findOne({
+          where: { phoneNumber: linkDto.phone }
+        });
+
+        if (systemUser) {
+          console.log(`✅ Tìm thấy User theo SĐT: ${linkDto.phone} → ${systemUser.id}`);
+        }
+      }
+
+      // 4. Nếu không tìm thấy theo SĐT, thử tìm theo email
+      if (!systemUser && linkDto.email) {
+        systemUser = await this.userRepository.findOne({
+          where: { email: linkDto.email }
+        });
+
+        if (systemUser) {
+          console.log(`✅ Tìm thấy User theo email: ${linkDto.email} → ${systemUser.id}`);
+        }
+      }
+
+      // 5. Nếu không tìm thấy theo email, thử tìm theo identity (CCCD/mã NV)
+      if (!systemUser && linkDto.identity) {
+        systemUser = await this.userRepository.findOne({
+          where: { identity: linkDto.identity }
+        });
+
+        if (systemUser) {
+          console.log(`✅ Tìm thấy User theo identity: ${linkDto.identity} → ${systemUser.id}`);
+        }
+      }
+
+      // 6. Nếu tìm thấy User, thực hiện liên kết
+      if (systemUser) {
+        // Kiểm tra User này đã liên kết với Zalo khác chưa
+        const existingLink = await this.zaloUserRepository.findOne({
+          where: { userId: systemUser.id }
+        });
+
+        if (existingLink && existingLink.zaloId !== zaloId) {
+          return {
+            linked: false,
+            user: null,
+            message: 'Tài khoản hệ thống này đã được liên kết với một tài khoản Zalo khác'
+          };
+        }
+
+        // Thực hiện liên kết
+        zaloUser.userId = systemUser.id;
+        await this.zaloUserRepository.save(zaloUser);
+
+        console.log(`🔗 Đã liên kết thành công: ZaloID ${zaloId} ↔ UserID ${systemUser.id}`);
+
+        return {
+          linked: true,
+          user: {
+            id: systemUser.id,
+            fullName: systemUser.fullName,
+            phoneNumber: systemUser.phoneNumber,
+            email: systemUser.email,
+            organizationId: systemUser.organizationId
+          },
+          message: 'Tự động liên kết tài khoản thành công'
+        };
+      }
+
+      // 7. Không tìm thấy User nào phù hợp
+      return {
+        linked: false,
+        user: null,
+        message: 'Không tìm thấy tài khoản hệ thống phù hợp với thông tin đã cung cấp'
+      };
+
+    } catch (error) {
+      console.error('❌ Lỗi auto link account:', error);
+      throw new BadRequestException(`Lỗi liên kết tự động: ${error.message}`);
+    }
+  }
+
+  /**
+   * Kiểm tra trạng thái liên kết của tài khoản Zalo
+   */
+  async checkLinkStatus(zaloId: string) {
+    try {
+      const zaloUser = await this.zaloUserRepository.findOne({
+        where: { zaloId },
+        relations: ['user']
+      });
+
+      if (!zaloUser) {
+        throw new BadRequestException('Không tìm thấy người dùng Zalo');
+      }
+
+      const isLinked = !!zaloUser.userId;
+
+      return {
+        isLinked,
+        linkedUser: isLinked ? {
+          id: zaloUser.user?.id,
+          fullName: zaloUser.user?.fullName,
+          phoneNumber: zaloUser.user?.phoneNumber,
+          email: zaloUser.user?.email,
+          organizationId: zaloUser.user?.organizationId
+        } : null,
+        zaloInfo: {
+          zaloId: zaloUser.zaloId,
+          name: zaloUser.name,
+          phone: zaloUser.phone,
+          avatar: zaloUser.avatar
+        },
+        linkDate: isLinked ? zaloUser.updatedAt : null
+      };
+
+    } catch (error) {
+      console.error('❌ Lỗi check link status:', error);
+      throw new BadRequestException(`Lỗi kiểm tra trạng thái liên kết: ${error.message}`);
+    }
+  }
+
+  /**
+   * Tự động thử liên kết bằng SĐT từ Zalo profile
+   */
+  async autoLinkByZaloPhone(zaloId: string) {
+    try {
+      const zaloUser = await this.zaloUserRepository.findOne({
+        where: { zaloId },
+        relations: ['user']
+      });
+
+      if (!zaloUser || zaloUser.userId) {
+        return { linked: !!zaloUser?.userId, message: 'Đã liên kết hoặc không tìm thấy ZaloUser' };
+      }
+
+      if (!zaloUser.phone) {
+        return { linked: false, message: 'Zalo user không có số điện thoại' };
+      }
+
+      // Tự động liên kết bằng SĐT từ Zalo
+      return await this.autoLinkAccount(zaloId, { phone: zaloUser.phone });
+
+    } catch (error) {
+      console.error('❌ Lỗi auto link by Zalo phone:', error);
+      return { linked: false, message: `Lỗi: ${error.message}` };
+    }
+  }
+
+  // Sinh chuỗi ngẫu nhiên
+  private randomString(len = 64) {
+    return crypto.randomBytes(len).toString('base64url').substring(0, len);
+  }
+
+  // Sinh code_challenge từ code_verifier
+  private generateChallenge(verifier: string) {
+    return crypto.createHash('sha256').update(verifier).digest('base64url');
+  }
+
+  // 🔹 B1: Tạo URL xác thực OA
+  async generateAuthUrl() {
+    const state = this.randomString(32);
+    const codeVerifier = this.randomString(64);
+    const codeChallenge = this.generateChallenge(codeVerifier);
+
+    // 📋 In ra cho admin copy vào Zalo Developer
+    console.log('� ===== COPY THESE VALUES TO ZALO DEVELOPER =====');
+    console.log('STATE:', state);
+    console.log('CODE_CHALLENGE:', codeChallenge);
+    console.log('CODE_CHALLENGE_METHOD: S256');
+    console.log('REDIRECT_URI:', this.redirectUri);
+    console.log('APP_ID:', this.appId);
+    console.log('==================================================');
+
+    this.codeVerifierMap.set(state, codeVerifier);
+
+    // � Trả về luôn để admin copy dễ dàng
+    return {
+      success: true,
+      message: 'Copy 2 giá trị này vào Zalo Developer',
+      data: {
+        state,
+        code_challenge: codeChallenge
+      },
+      // Thông tin bổ sung (optional)
+      info: {
+        code_challenge_method: 'S256',
+        redirect_uri: this.redirectUri,
+        app_id: this.appId,
+        instruction: 'Paste STATE và CODE_CHALLENGE vào form Zalo Developer'
+      }
+    };
+  }
+
+  // 🔹 B2: Đổi code lấy access_token
+  async exchangeToken(code: string, state: string) {
+    console.log('🔍 Debug exchangeToken:', { code, state, mapSize: this.codeVerifierMap.size });
+    console.log('🔍 Available states:', Array.from(this.codeVerifierMap.keys()));
+
+    const codeVerifier = this.codeVerifierMap.get(state);
+    if (!codeVerifier) {
+      console.error('❌ Invalid state:', { state, availableStates: Array.from(this.codeVerifierMap.keys()) });
+      throw new Error(`Invalid state: ${state}. Available states: ${Array.from(this.codeVerifierMap.keys()).join(', ')}`);
+    }
+
+    const body = new URLSearchParams({
+      app_id: this.appId,
+      grant_type: 'authorization_code',
+      code,
+      code_verifier: codeVerifier,
+      redirect_uri: this.redirectUri,
+      app_secret: this.appSecret,
+    });
+
+    const response = await firstValueFrom(
+      this.http.post('https://oauth.zaloapp.com/v4/oa/access_token', body.toString(), {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      }),
+    );
+    const data = (response as any).data;
+
+    await this.tokenService.saveToken(data);
+    return { message: 'Lấy access_token thành công', data };
+  }
+
+  // 🔹 B3: Làm mới token
+  async refreshToken() {
+    const token = await this.tokenService.getToken();
+    if (!token?.refresh_token) throw new Error('Chưa có refresh_token');
+
+    const body = new URLSearchParams({
+      app_id: this.appId,
+      grant_type: 'refresh_token',
+      refresh_token: token.refresh_token,
+      app_secret: this.appSecret,
+    });
+
+    const response = await firstValueFrom(
+      this.http.post('https://oauth.zaloapp.com/v4/oa/access_token', body.toString(), {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      }),
+    );
+    const data = (response as any).data;
+
+    await this.tokenService.saveToken(data);
+    return { message: 'Refresh thành công', data };
+  }
+}

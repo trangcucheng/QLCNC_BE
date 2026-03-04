@@ -1,0 +1,171 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 1,
+    "analysis": {
+      "analyzer": {
+        "vietnamese_analyzer": {
+          "type": "standard",
+          "stopwords": "_vietnamese_"
+        }
+      }
+    }
+  },
+  "mappings": {
+    "properties": {
+      "id": {
+        "type": "integer"
+      },
+      "tenBaoCao": {
+        "type": "text",
+        "analyzer": "vietnamese_analyzer",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "loaiBaoCao": {
+        "type": "keyword"
+      },
+      "thoiGianCapNhatDoanSoId": {
+        "type": "integer"
+      },
+      "nguoiBaoCaoId": {
+        "type": "keyword"
+      },
+      "organizationId": {
+        "type": "integer"
+      },
+      "xaPhuongId": {
+        "type": "integer"
+      },
+      "cumKhuCnId": {
+        "type": "integer"
+      },
+      "soLuongDoanVienNam": {
+        "type": "integer"
+      },
+      "soLuongDoanVienNu": {
+        "type": "integer"
+      },
+      "soLuongCNVCLDNam": {
+        "type": "integer"
+      },
+      "soLuongCNVCLDNu": {
+        "type": "integer"
+      },
+      "tongSoCongDoan": {
+        "type": "integer"
+      },
+      "tongSoCnvcld": {
+        "type": "integer"
+      },
+      "noiDung": {
+        "type": "text",
+        "analyzer": "vietnamese_analyzer"
+      },
+      "loaiBaoCao": {
+        "type": "keyword"
+      },
+      "trangThaiPheDuyet": {
+        "type": "keyword"
+      },
+      "ghiChu": {
+        "type": "text",
+        "analyzer": "vietnamese_analyzer"
+      },
+      "nguoiPheDuyetId": {
+        "type": "keyword"
+      },
+      "ngayPheDuyet": {
+        "type": "date",
+        "format": "strict_date_optional_time||epoch_millis"
+      },
+      "xaPhuongId": {
+        "type": "integer"
+      },
+      "cumKhuCnId": {
+        "type": "integer"
+      },
+      "createdAt": {
+        "type": "date",
+        "format": "strict_date_optional_time||epoch_millis"
+      },
+      "updatedAt": {
+        "type": "date",
+        "format": "strict_date_optional_time||epoch_millis"
+      },
+      "thoiGian": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "ten": {
+            "type": "text",
+            "analyzer": "vietnamese_analyzer",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          },
+          "thoiGianBatDau": {
+            "type": "date",
+            "format": "strict_date_optional_time||epoch_millis"
+          },
+          "thoiGianKetThuc": {
+            "type": "date",
+            "format": "strict_date_optional_time||epoch_millis"
+          },
+          "moTa": {
+            "type": "text",
+            "analyzer": "vietnamese_analyzer"
+          },
+          "loaiKy": {
+            "type": "keyword"
+          }
+        }
+      },
+      "nguoiBaoCao": {
+        "properties": {
+          "id": {
+            "type": "keyword"
+          },
+          "fullName": {
+            "type": "text",
+            "analyzer": "vietnamese_analyzer",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          },
+          "email": {
+            "type": "keyword"
+          }
+        }
+      },
+      "organization": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "text",
+            "analyzer": "vietnamese_analyzer",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
