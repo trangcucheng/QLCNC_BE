@@ -1,0 +1,17 @@
+[
+  { "name": "CREATE_USER", "description": "Tạo user mới" },
+  { "name": "UPDATE_USER", "description": "Cập nhật user" },
+  { "name": "DELETE_USER", "description": "Xóa user" },
+  { "name": "VIEW_USER", "description": "Xem thông tin user" },
+  { "name": "BLOCK_USER", "description": "Khóa tài khoản user" },
+  { "name": "ASSIGN_ROLE", "description": "Gán vai trò cho user" },
+  { "name": "CREATE_UNIT", "description": "Tạo đơn vị mới" },
+  { "name": "UPDATE_UNIT", "description": "Cập nhật đơn vị" },
+  { "name": "DELETE_UNIT", "description": "Xóa đơn vị" },
+  { "name": "DELETE_ALL_UNITS", "description": "Xóa tất cả đơn vị" },
+  { "name": "VIEW_UNIT", "description": "Xem thông tin đơn vị" },
+  { "name": "CREATE_ROLE", "description": "Tạo role mới" },
+  { "name": "UPDATE_ROLE", "description": "Cập nhật role" },
+  { "name": "DELETE_ROLE", "description": "Xóa role" },
+  { "name": "VIEW_ROLE", "description": "Xem thông tin role" }
+]

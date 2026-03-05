@@ -1,0 +1,129 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  // output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+  SUPER_ADMIN
+  SUB_ADMIN
+  MANAGER
+  CONTRIBUTOR
+}
+
+model User {
+  id           String    @id @default(uuid())
+  firstName    String?
+  lastName     String?
+  email        String    @unique
+  password     String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  lastLogin    DateTime?
+  phoneNumber  String?   @unique
+  refreshToken String?   @unique
+  avatarUrl    String?
+  blocked      Boolean?
+
+  // role Role @default(USER)
+  userRoles UserRole[]
+
+  LoginHistory LoginHistory[]
+}
+
+model Role_ {
+  id              String           @id @default(uuid())
+  name            String           @unique
+  description     String?
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model Permission {
+  id              String           @id @default(uuid())
+  name            String           @unique
+  description     String?
+  rolePermissions RolePermission[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model RolePermission {
+  id           String @id @default(uuid())
+  roleId       String
+  permissionId String
+
+  role       Role_      @relation(fields: [roleId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
+
+  @@unique([roleId, permissionId])
+}
+
+model UserRole {
+  id     String @id @default(uuid())
+  userId String
+  roleId String
+
+  user User  @relation(fields: [userId], references: [id])
+  role Role_ @relation(fields: [roleId], references: [id])
+
+  @@unique([userId, roleId])
+}
+
+model Unit {
+  id          Int     @id @default(autoincrement())
+  code        String  @unique
+  name        String
+  description String?
+  status      String? // Active / Inactive
+
+  parentId Int?
+  parent   Unit?  @relation("UnitHierarchy", fields: [parentId], references: [id])
+  children Unit[] @relation("UnitHierarchy")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Blacklist {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  expiredAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model LoginHistory {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ipAddress String?
+  userAgent String?
+  device    String?
+  location  String? // Optional: city, country info if using IP geo service
+  createdAt DateTime @default(now())
+}
+
+model SignLog {
+  id         String   @id @default(uuid())
+  fileName   String
+  filePath   String
+  signedAt   DateTime
+  isValid    Boolean
+  signerName String?
+  issuedBy   String?
+  verifiedAt DateTime @default(now())
+}

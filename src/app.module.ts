@@ -1,69 +1,91 @@
-// eslint-disable-next-line simple-import-sort/imports
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { ScheduleModule } from '@nestjs/schedule';
-
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { AuthModule } from './HeThong/auth/auth.module';
-import { UnifiedAuthModule } from './HeThong/auth/unified-auth.module';
-import mail from './config/mail.config';
-import { OrmModule } from './orm';
-import { RoleModule } from './HeThong/role/role.module';
-import { UserModule } from './HeThong/user/user.module';
-import { UserTokenModule } from './HeThong/user-token/user-token.module';
-import { getBackupConfig } from './config/backup.config';
-import { OrganizationModule } from './HeThong/organization/organization.module';
-import { StaffModule } from './HeThong/staff/staff.module';
-import { XaPhuongModule } from './HeThong/xa-phuong/xa-phuong.module';
-import { ChucVuModule } from './HeThong/chuc-vu/chuc-vu.module';
-import { CumKhuCongNghiepModule } from './HeThong/cum-khu-cong-nghiep/cum-khu-cong-nghiep.module';
-import { LoaiSuKienModule } from './SuKien/loai-su-kien/loai-su-kien.module';
-import { NguoiNhanSuKienModule } from './SuKien/nguoi-nhan-su-kien/nguoi-nhan-su-kien.module';
-import { SuKienModule } from './SuKien/su-kien/su-kien.module';
-import { ThoiGianCapNhatDoanSoModule } from './HeThong/thoi-gian-cap-nhat-doan-so/thoi-gian-cap-nhat-doan-so.module';
-import { BaoCaoDoanSoTheoKyModule } from './HeThong/bao-cao-doan-so-theo-ky/bao-cao-doan-so-theo-ky.module';
-import { report } from 'process';
-import { ReportModule } from './report/report.module';
-import { ThongBaoModule } from './HeThong/thong-bao/thong-bao.module';
-import { MailModule } from './HeThong/mail/mail.module';
-import { CongTyChuaCoCDModule } from './HeThong/cong-ty-chua-co-cd/cong-ty-chua-co-cd.module';
-import { ElasticModule } from './elastic/elastic.module';
+import { PrismaService } from './prisma.service';
+import { APP_GUARD, Reflector } from '@nestjs/core';
+import { CustomAuthGuard } from './guard/custom-auth.guard';
+import { RolesGuard } from './guard/roles.guard';
+import { ConfigModule } from '@nestjs/config';
+import { PermissionsGuard } from './guard/permissions.guard';
+import { AuthModule } from './auth/auth.module';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { UsersModule } from './module/nguoiDung/users.module';
+import { UnitsModule } from './module/donVi/units.module';
+import { RolesModule } from './module/vaiTro/roles.module';
+import { PermissionsModule } from './module/quyen/permissions.module';
+import { JwtAuthGuard } from './auth/passport/jwt-auth.guard';
+import { ScheduleModule } from '@nestjs/schedule';
+import { LoginHistoryModule } from './module/lichSuDangNhap/login-histories.module';
+import { BlacklistModule } from './log/blacklist/blacklist.module';
+import { CronCleanBlacklistService } from './log/blacklist/cron-clean-blacklist.service';
+import { BackupModule } from './backup/backup.module';
+import { ExportsModule } from './module/exports_/exports.module';
+import { SignsModule } from './module/kyHieu/signs.module';
+import { DonViHanhChinhModule } from './module/donViHanhChinh/don-vi-hanh-chinh.module';
+import { ToimDanhModule } from './module/toimDanh/toim-danh.module';
+import { QuanHeXaHoiModule } from './module/quanHeXaHoi/quan-he-xa-hoi.module';
+import { BieuMauModule } from './module/bieuMau/bieu-mau.module';
+import { ThongBaoModule } from './module/thongBao/thong-bao.module';
+import { CauHinhHeThongModule } from './module/cauHinhHeThong/cau-hinh-he-thong.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env'],
-      load: [mail, getBackupConfig],
-      cache: true,
+      envFilePath: '.env',
+    }),
+    ThrottlerModule.forRoot({
+      throttlers: [
+        {
+          ttl: 60000,
+          limit: 10,
+        },
+      ],
     }),
     ScheduleModule.forRoot(),
-    OrmModule,
-    ElasticModule,
-    MailModule,
-    UserModule,
-    UserTokenModule,
-    RoleModule,
     AuthModule,
-    UnifiedAuthModule,
-    OrganizationModule,
-    StaffModule,
-    XaPhuongModule,
-    ChucVuModule,
-    CumKhuCongNghiepModule,
-    CongTyChuaCoCDModule,
-    LoaiSuKienModule,
-    NguoiNhanSuKienModule,
-    SuKienModule,
-    ThoiGianCapNhatDoanSoModule,
-    BaoCaoDoanSoTheoKyModule,
-    ReportModule,
-    ThongBaoModule
+    UsersModule,
+    UnitsModule,
+    RolesModule,
+    PermissionsModule,
+    BlacklistModule,
+    LoginHistoryModule,
+    BackupModule,
+    ExportsModule,
+    SignsModule,
+    DonViHanhChinhModule,
+    ToimDanhModule,
+    QuanHeXaHoiModule,
+    BieuMauModule,
+    ThongBaoModule,
+    CauHinhHeThongModule,
   ],
   controllers: [AppController],
-  providers: [AppService,]
+  providers: [
+    CronCleanBlacklistService,
+    AppService,
+    PrismaService,
+    // {
+    //   provide: APP_GUARD,
+    //   useClass: CustomAuthGuard, // Global AuthGuard to run first
+    // },
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard, // Global RolesGuard to run after AuthGuard
+    },
+    {
+      provide: APP_GUARD,
+      useClass: PermissionsGuard,
+    },
+    Reflector,
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerModule, // Global ThrottlerGuard to limit requests
+    },
+  ],
 })
-export class AppModule {
-
-}
+export class AppModule {}

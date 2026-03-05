@@ -1,0 +1,443 @@
+// Database Schema cho Hệ thống Quản lý Đối tượng Vi phạm Pháp luật - Đà Nẵng
+// Tất cả tên bảng và trường đều bằng tiếng Việt
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ============== ENUM DEFINITIONS ==============
+
+enum LoaiNguoiDung {
+  CAN_BO_NGHIEP_VU
+  LANH_DAO
+  QUAN_TRI_VIEN
+}
+
+enum GioiTinh {
+  NAM
+  NU
+}
+
+enum TrangThaiHoSo {
+  DANG_XU_LY
+  TAM_DUNG
+  HOAN_THANH
+  CHUYEN_GIAI
+  HUY_BO
+}
+
+enum MucDoViPham {
+  NONG
+  RAT_NONG
+  DAC_BIET_NONG
+}
+
+enum TrangThaiDoiTuong {
+  DANG_THEO_DOI
+  TAM_GIAM
+  DA_XU_LY
+  CHUYEN_NOI_KHAC
+}
+
+enum LoaiTaiLieu {
+  HINH_ANH
+  VIDEO
+  TAI_LIEU
+  CHUNG_CU_SO
+}
+
+// ============== USER MANAGEMENT TABLES ==============
+
+// Bảng Người dùng hệ thống
+model NguoiDung {
+  id                String              @id @default(uuid())
+  hoTen             String
+  email             String              @unique
+  matKhau           String
+  soDienThoai       String?             @unique
+  loaiNguoiDung     LoaiNguoiDung
+  trangThaiHoatDong Boolean             @default(true)
+  lanDangNhapCuoi   DateTime?
+  ngayTao           DateTime            @default(now())
+  ngayCapNhat       DateTime            @updatedAt
+  
+  // Relations
+  vaiTroNguoiDung   VaiTroNguoiDung[]
+  lichSuDangNhap    LichSuDangNhap[]
+  hoSoDoiTuong      HoSoDoiTuong[]
+  hoSoVuViec        HoSoVuViec[]
+}
+
+// Bảng Vai trò
+model VaiTro {
+  id                String              @id @default(uuid())
+  tenVaiTro         String              @unique
+  moTa              String?
+  ngayTao           DateTime            @default(now())
+  ngayCapNhat       DateTime            @updatedAt
+  
+  // Relations
+  vaiTroNguoiDung   VaiTroNguoiDung[]
+  vaiTroQuyen       VaiTroQuyen[]
+}
+
+// Bảng Quyền hạn
+model Quyen {
+  id          String        @id @default(uuid())
+  tenQuyen    String        @unique
+  moTa        String?
+  ngayTao     DateTime      @default(now())
+  ngayCapNhat DateTime      @updatedAt
+  
+  // Relations
+  vaiTroQuyen VaiTroQuyen[]
+}
+
+// Bảng kết nối Vai trò - Quyền
+model VaiTroQuyen {
+  id      String @id @default(uuid())
+  vaiTroId String
+  quyenId  String
+  
+  vaiTro  VaiTro @relation(fields: [vaiTroId], references: [id])
+  quyen   Quyen  @relation(fields: [quyenId], references: [id])
+  
+  @@unique([vaiTroId, quyenId])
+}
+
+// Bảng kết nối Người dùng - Vai trò
+model VaiTroNguoiDung {
+  id           String @id @default(uuid())
+  nguoiDungId  String
+  vaiTroId     String
+  
+  nguoiDung    NguoiDung @relation(fields: [nguoiDungId], references: [id])
+  vaiTro       VaiTro    @relation(fields: [vaiTroId], references: [id])
+  
+  @@unique([nguoiDungId, vaiTroId])
+}
+
+// Bảng Lịch sử đăng nhập
+model LichSuDangNhap {
+  id          String    @id @default(uuid())
+  nguoiDungId String
+  diaChiIP    String?
+  thietBi     String?
+  trinh_duyet String?
+  viTri       String?
+  ngayTao     DateTime  @default(now())
+  
+  nguoiDung   NguoiDung @relation(fields: [nguoiDungId], references: [id], onDelete: Cascade)
+}
+
+// ============== CATEGORY TABLES ==============
+
+// Bảng Đơn vị hành chính (2 cấp: Tỉnh/Thành phố và Xã/Phường)
+model DonViHanhChinh {
+  id          String              @id @default(uuid())
+  ma          String              @unique
+  ten         String
+  cap         Int                 // 1: Tỉnh/Thành phố, 2: Xã/Phường
+  loai        String?             // Tỉnh, Thành phố, Xã, Phường
+  moTa        String?
+  trangThai   Boolean             @default(true)
+  ngayTao     DateTime            @default(now())
+  ngayCapNhat DateTime            @updatedAt
+  
+  // Hierarchy - Cấu trúc phân cấp hành chính VN (2 cấp)
+  // Xã/Phường thuộc trực tiếp Tỉnh/Thành phố
+  tinhThanhPhoId  String?
+  tinhThanhPho    DonViHanhChinh?     @relation("TinhThanhPho_XaPhuong", fields: [tinhThanhPhoId], references: [id])
+  xaPhuong        DonViHanhChinh[]    @relation("TinhThanhPho_XaPhuong")
+  
+  // Relations  
+  hoSoDoiTuong_queQuan     HoSoDoiTuong[] @relation("QueQuan")
+  hoSoDoiTuong_noiThuongTru HoSoDoiTuong[] @relation("NoiThuongTru")
+  hoSoDoiTuong_noiOHienTai  HoSoDoiTuong[] @relation("NoiOHienTai")
+  hoSoVuViec               HoSoVuViec[]
+}
+
+// Bảng Tội danh
+model ToimDanh {
+  id          String     @id @default(uuid())
+  ma          String     @unique
+  ten         String
+  moTa        String?
+  khungHinhPhat String?  // Mức hình phạt tối thiểu, tối đa
+  ngayTao     DateTime   @default(now())
+  ngayCapNhat DateTime   @updatedAt
+  
+  // Relations
+  vuViecToimDanh VuViecToimDanh[]
+}
+
+// Bảng Quan hệ xã hội
+model QuanHeXaHoi {
+  id          String   @id @default(uuid())
+  tenQuanHe   String   @unique // Cha, Mẹ, Vợ, Chồng, Con, Anh/Em, etc.
+  moTa        String?
+  ngayTao     DateTime @default(now())
+  ngayCapNhat DateTime @updatedAt
+  
+  // Relations
+  quanHeDoiTuong QuanHeDoiTuong[]
+}
+
+// Bảng Biểu mẫu
+model BieuMau {
+  id          String   @id @default(uuid())
+  ten         String
+  moTa        String?
+  duongDan    String   // Đường dẫn file
+  phienBan    String?
+  ngayTao     DateTime @default(now())
+  ngayCapNhat DateTime @updatedAt
+}
+
+// Bảng Đơn vị (Phòng ban, bộ phận làm việc)
+model DonVi {
+  id          String   @id @default(uuid())
+  ma          String   @unique
+  ten         String
+  moTa        String?
+  trangThai   Boolean  @default(true)
+  ngayTao     DateTime @default(now())
+  ngayCapNhat DateTime @updatedAt
+  
+  // Hierarchy - Cấu trúc phân cấp đơn vị
+  donViChaId  String?
+  donViCha    DonVi?   @relation("DonViCap", fields: [donViChaId], references: [id])
+  donViCon    DonVi[]  @relation("DonViCap")
+}
+
+// ============== MAIN ENTITY TABLES ==============
+
+// Bảng Hồ sơ đối tượng (CON NGƯỜI)
+model HoSoDoiTuong {
+  id          String              @id @default(uuid())
+  
+  // Thông tin cơ bản
+  hoTen       String
+  tenGoiKhac  String?
+  gioiTinh    GioiTinh
+  ngaySinh    DateTime
+  noiSinh     String?
+  quocTich    String              @default("Việt Nam")
+  danToc      String              @default("Kinh")
+  tonGiao     String?
+  
+  // Giấy tờ tùy thân
+  soCMND_CCCD String?             @unique
+  ngayCapCMND DateTime?
+  noiCapCMND  String?
+  soHoChieu   String?
+  ngayCapHoChieu DateTime?
+  noiCapHoChieu  String?
+  
+  // Thông tin học vấn/nghề nghiệp
+  trinhDoHocVan String?
+  ngheNghiep    String?
+  noiLamViec    String?
+  capBac        String?
+  chucVu        String?
+  donVi         String?
+  
+  // Địa chỉ
+  queQuanId       String?
+  queQuan         DonViHanhChinh? @relation("QueQuan", fields: [queQuanId], references: [id])
+  diaChiQueQuan   String?
+  
+  noiThuongTruId  String?
+  noiThuongTru    DonViHanhChinh? @relation("NoiThuongTru", fields: [noiThuongTruId], references: [id])
+  diaChiThuongTru String?
+  
+  noiOHienTaiId   String?
+  noiOHienTai     DonViHanhChinh? @relation("NoiOHienTai", fields: [noiOHienTaiId], references: [id])
+  diaChiHienTai   String?
+  
+  // Tiền án tiền sự
+  tienAn      String?             // Mô tả tiền án
+  tienSu      String?             // Mô tả tiền sự
+  
+  // Trạng thái và thông tin quản lý
+  trangThai     TrangThaiDoiTuong @default(DANG_THEO_DOI)
+  ghiChu        String?
+  anhDaiDien    String?           // Đường dẫn ảnh
+  
+  // Metadata
+  nguoiTaoId    String
+  ngayTao       DateTime          @default(now())
+  ngayCapNhat   DateTime          @updatedAt
+  
+  // Relations
+  nguoiTao        NguoiDung         @relation(fields: [nguoiTaoId], references: [id])
+  quanHeDoiTuong  QuanHeDoiTuong[]
+  vuViecDoiTuong  VuViecDoiTuong[]
+  taiLieuDoiTuong TaiLieuDoiTuong[]
+}
+
+// Bảng Quan hệ giữa các đối tượng
+model QuanHeDoiTuong {
+  id              String        @id @default(uuid())
+  doiTuongChinh   String        // ID của đối tượng chính
+  doiTuongLienQuan String       // ID của đối tượng liên quan  
+  quanHeId        String        // Loại quan hệ
+  moTa            String?       // Mô tả chi tiết quan hệ
+  ngayTao         DateTime      @default(now())
+  
+  // Relations
+  doiTuongChinh_ref   HoSoDoiTuong @relation(fields: [doiTuongChinh], references: [id])
+  quanHe              QuanHeXaHoi  @relation(fields: [quanHeId], references: [id])
+}
+
+// Bảng Hồ sơ vụ việc (VỤ VIỆC)
+model HoSoVuViec {
+  id              String              @id @default(uuid())
+  
+  // Thông tin cơ bản
+  soHoSo          String              @unique
+  tenVuViec       String
+  moTaVuViec      String
+  ngayXayRa       DateTime
+  diaChiXayRa     String
+  donViHanhChinhId String?
+  donViHanhChinh  DonViHanhChinh?     @relation(fields: [donViHanhChinhId], references: [id])
+  
+  // Phân loại
+  mucDoViPham     MucDoViPham
+  trangThai       TrangThaiHoSo       @default(DANG_XU_LY)
+  
+  // Xử lý
+  donViXuLy       String?             // Đơn vị đang xử lý
+  canBoXuLy       String?             // Cán bộ phụ trách
+  ngayBatDauXuLy  DateTime?
+  ngayKetThuc     DateTime?
+  ketQuaXuLy      String?
+  ghiChu          String?
+  
+  // Metadata
+  nguoiTaoId      String
+  ngayTao         DateTime            @default(now())
+  ngayCapNhat     DateTime            @updatedAt
+  
+  // Relations
+  nguoiTao        NguoiDung           @relation(fields: [nguoiTaoId], references: [id])
+  vuViecDoiTuong  VuViecDoiTuong[]
+  vuViecToimDanh  VuViecToimDanh[]
+  taiLieuVuViec   TaiLieuVuViec[]
+  lichSuXuLy      LichSuXuLyVuViec[]
+}
+
+// Bảng kết nối Vụ việc - Đối tượng
+model VuViecDoiTuong {
+  id           String       @id @default(uuid())
+  vuViecId     String
+  doiTuongId   String
+  vaiTro       String?      // Vai trò của đối tượng trong vụ việc (chủ mưu, đồng phạm, etc.)
+  moTa         String?
+  ngayTao      DateTime     @default(now())
+  
+  // Relations
+  vuViec       HoSoVuViec   @relation(fields: [vuViecId], references: [id])
+  doiTuong     HoSoDoiTuong @relation(fields: [doiTuongId], references: [id])
+  
+  @@unique([vuViecId, doiTuongId])
+}
+
+// Bảng kết nối Vụ việc - Tội danh
+model VuViecToimDanh {
+  id         String     @id @default(uuid())
+  vuViecId   String
+  toimDanhId String
+  moTa       String?    // Mô tả cách thức vi phạm
+  ngayTao    DateTime   @default(now())
+  
+  // Relations
+  vuViec     HoSoVuViec @relation(fields: [vuViecId], references: [id])
+  toimDanh   ToimDanh   @relation(fields: [toimDanhId], references: [id])
+  
+  @@unique([vuViecId, toimDanhId])
+}
+
+// Bảng Lịch sử xử lý vụ việc
+model LichSuXuLyVuViec {
+  id          String       @id @default(uuid())
+  vuViecId    String
+  trangThaiCu TrangThaiHoSo?
+  trangThaiMoi TrangThaiHoSo
+  lyDo        String
+  nguoiThucHien String     // Tên người thực hiện
+  ngayThucHien DateTime   @default(now())
+  
+  // Relations
+  vuViec      HoSoVuViec @relation(fields: [vuViecId], references: [id])
+}
+
+// ============== DOCUMENT MANAGEMENT TABLES ==============
+
+// Bảng Tài liệu đối tượng
+model TaiLieuDoiTuong {
+  id          String      @id @default(uuid())
+  doiTuongId  String
+  tenTaiLieu  String
+  loaiTaiLieu LoaiTaiLieu
+  duongDan    String      // Đường dẫn file
+  kichThuoc   Int?        // Kích thước file (bytes)
+  moTa        String?
+  ngayTao     DateTime    @default(now())
+  
+  // Relations
+  doiTuong    HoSoDoiTuong @relation(fields: [doiTuongId], references: [id])
+}
+
+// Bảng Tài liệu vụ việc
+model TaiLieuVuViec {
+  id          String      @id @default(uuid())
+  vuViecId    String
+  tenTaiLieu  String
+  loaiTaiLieu LoaiTaiLieu
+  duongDan    String
+  kichThuoc   Int?
+  moTa        String?
+  ngayTao     DateTime    @default(now())
+  
+  // Relations
+  vuViec      HoSoVuViec @relation(fields: [vuViecId], references: [id])
+}
+
+// ============== SYSTEM TABLES ==============
+
+// Bảng Blacklist token
+model DanhSachDen {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  hetHan    DateTime
+  ngayTao   DateTime @default(now())
+}
+
+// Bảng Thông báo hệ thống
+model ThongBao {
+  id          String   @id @default(uuid())
+  tieuDe      String
+  noiDung     String
+  loaiThongBao String  // THONG_BAO, HUONG_DAN, QUY_DINH
+  uu_tien     Int      @default(1) // 1: Thấp, 2: Trung bình, 3: Cao
+  trangThai   Boolean  @default(true)
+  ngayTao     DateTime @default(now())
+  ngayCapNhat DateTime @updatedAt
+}
+
+// Bảng Cấu hình hệ thống
+model CauHinhHeThong {
+  id          String   @id @default(uuid())
+  khoa        String   @unique
+  giaTri      String
+  moTa        String?
+  ngayTao     DateTime @default(now())
+  ngayCapNhat DateTime @updatedAt
+}
