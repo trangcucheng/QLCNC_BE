@@ -32,7 +32,7 @@ import { JwtAuthGuard } from 'src/auth/passport/jwt-auth.guard';
 @ApiBearerAuth('access-token') // Use the name defined in main.ts
 @Controller('users')
 export class UsersController {
-  constructor(private userService: UsersService) {}
+  constructor(private userService: UsersService) { }
 
   @Get('/list-all-user')
   @UseGuards(JwtAuthGuard)

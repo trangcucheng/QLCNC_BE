@@ -79,8 +79,15 @@ export class AuthService {
   async login(
     loginDTO: LoginDTO,
     req: Request,
-  ): Promise<{ accessToken: string }> {
-    // find user based on email
+  ): Promise<{
+    statusCode: number;
+    message: string;
+    data: {
+      access_token: string;
+      user: any;
+    };
+  }> {
+
     const user = await this.prisma.nguoiDung.findFirst({
       where: {
         email: loginDTO.email,
@@ -88,55 +95,89 @@ export class AuthService {
       include: {
         vaiTroNguoiDung: {
           include: {
-            vaiTro: true, // lấy thông tin role từ VaiTroNguoiDung -> VaiTro_
+            vaiTro: {
+              include: {
+                vaiTroQuyen: {
+                  include: {
+                    quyen: true,
+                  },
+                },
+              },
+            },
           },
         },
       },
     });
 
-    if (!user || user.trangThaiHoatDong) {
+    if (!user || !user.trangThaiHoatDong) {
       throw new UnauthorizedException('User not found or blocked');
     }
 
-    // check password
     const isMatched = await this.decryptPassword(
       loginDTO.password,
       user.matKhau,
     );
+
     if (!isMatched) {
       throw new UnauthorizedException('Invalid password');
     }
 
-    // Lấy danh sách role name của user
     const roles = user.vaiTroNguoiDung.map((ur) => ur.vaiTro.tenVaiTro);
 
-    // generate JWT token
-    const accessToken = await this.jwtService.signAsync(
+    const permissionsSet = new Set<string>();
+    user.vaiTroNguoiDung.forEach((ur) => {
+      ur.vaiTro.vaiTroQuyen.forEach((vq) => {
+        permissionsSet.add(vq.quyen.tenQuyen);
+      });
+    });
+
+    const permissions = Array.from(permissionsSet);
+
+    const access_token = await this.jwtService.signAsync(
       {
         email: user.email,
         id: user.id,
-        roles, // đưa mảng roles vào token
+        roles,
+        permissions,
         jti: uuidv4(),
       },
-      { expiresIn: '15m' },
+      { expiresIn: '24h' },
     );
 
-    // ✅ Save login history
     const ip =
       (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() ||
       req.socket?.remoteAddress ||
       '';
+
     await this.prisma.lichSuDangNhap.create({
       data: {
         nguoiDungId: user.id,
         diaChiIP: ip,
         trinh_duyet: req.headers['user-agent'],
         thietBi: this.detectDevice(req.headers['user-agent']),
-        viTri: null, // nếu có tích hợp IP geo service,
+        viTri: null,
       },
     });
 
-    return { accessToken };
+    await this.prisma.nguoiDung.update({
+      where: { id: user.id },
+      data: { lanDangNhapCuoi: new Date() },
+    });
+
+    const { matKhau, ...userWithoutPassword } = user;
+
+    return {
+      statusCode: 200,
+      message: 'Login successful',
+      data: {
+        access_token,
+        user: {
+          ...userWithoutPassword,
+          roles,
+          permissions,
+        },
+      },
+    };
   }
 
   private detectDevice(userAgent: string | undefined): string {

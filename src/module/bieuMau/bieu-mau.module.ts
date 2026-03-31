@@ -56,7 +56,7 @@ export class UpdateBieuMauDTO {
 // Service
 @Injectable()
 export class BieuMauService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async getAll(params: { page?: number; pageSize?: number } = {}) {
     const { page = 1, pageSize = 10 } = params;
@@ -97,7 +97,7 @@ export class BieuMauService {
 @ApiTags('Biểu mẫu')
 @Controller('bieu-mau')
 export class BieuMauController {
-  constructor(private service: BieuMauService) {}
+  constructor(private service: BieuMauService) { }
 
   @Get('/list-all')
   @Permissions('VIEW_BIEU_MAU')
@@ -137,4 +137,4 @@ export class BieuMauController {
   providers: [PrismaService, BieuMauService],
   exports: [BieuMauService],
 })
-export class BieuMauModule {}
+export class BieuMauModule { }

@@ -22,7 +22,7 @@ import { Permissions } from 'src/decorator/permissions.decorator';
 @ApiTags('Tội danh')
 @Controller('toim-danh')
 export class ToimDanhController {
-  constructor(private toimDanhService: ToimDanhService) {}
+  constructor(private toimDanhService: ToimDanhService) { }
 
   @Get('/list-all')
   @Permissions('VIEW_TOIM_DANH')

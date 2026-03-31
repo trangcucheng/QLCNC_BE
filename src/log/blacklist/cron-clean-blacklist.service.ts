@@ -5,7 +5,7 @@ import { PrismaService } from 'src/prisma.service';
 
 @Injectable()
 export class CronCleanBlacklistService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   @Cron(CronExpression.EVERY_2_HOURS)
   async handleCron() {

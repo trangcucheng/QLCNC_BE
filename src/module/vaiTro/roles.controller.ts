@@ -22,7 +22,7 @@ import { Permissions } from 'src/decorator/permissions.decorator';
 @ApiBearerAuth('access-token') // Use the name defined in main.ts
 @Controller('roles')
 export class RolesController {
-  constructor(private roleService: RolesService) {}
+  constructor(private roleService: RolesService) { }
 
   @Get('/list-all-role')
   @Permissions('VIEW_ROLE')

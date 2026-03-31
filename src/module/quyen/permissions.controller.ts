@@ -12,7 +12,7 @@ import { Public } from 'src/decorator/public.decorator';
 @ApiBearerAuth('access-token') // Use the name defined in main.ts
 @Controller('permissions')
 export class PermissionsController {
-  constructor(private permissionService: PermissionsService) {}
+  constructor(private permissionService: PermissionsService) { }
 
   @Public()
   @Get('/list-all-permission')

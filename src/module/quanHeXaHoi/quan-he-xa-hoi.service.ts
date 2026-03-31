@@ -4,7 +4,7 @@ import { Prisma, QuanHeXaHoi } from '@prisma/client';
 
 @Injectable()
 export class QuanHeXaHoiService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async getAll(params: { page?: number; pageSize?: number; orderBy?: Prisma.QuanHeXaHoiOrderByWithRelationInput } = {}) {
     const { page = 1, pageSize = 10, orderBy } = params;

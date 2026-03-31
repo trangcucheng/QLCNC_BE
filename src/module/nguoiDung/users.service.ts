@@ -19,7 +19,7 @@ export class UsersService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
-  ) {}
+  ) { }
   async getAllUsers(params: {
     page: number;
     pageSize: number;
@@ -35,14 +35,14 @@ export class UsersService {
       where: {
         ...(role
           ? {
-              vaiTroNguoiDung: {
-                some: {
-                  vaiTro: {
-                    tenVaiTro: role,
-                  },
+            vaiTroNguoiDung: {
+              some: {
+                vaiTro: {
+                  tenVaiTro: role,
                 },
               },
-            }
+            },
+          }
           : {}),
       },
       include: {
@@ -167,7 +167,7 @@ export class UsersService {
     // You may need to add it to the NguoiDung model if needed
     return this.prisma.nguoiDung.update({
       where: { id: userId },
-      data: { 
+      data: {
         // avatarUrl: avatarUrl 
         // Temporarily removing this until schema is updated
       },

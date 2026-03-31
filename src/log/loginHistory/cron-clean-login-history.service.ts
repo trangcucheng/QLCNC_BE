@@ -4,7 +4,7 @@ import { PrismaService } from 'src/prisma.service';
 
 @Injectable()
 export class CronCleanLoginHistoryService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   @Cron(CronExpression.EVERY_DAY_AT_10PM)
   async handleCron() {

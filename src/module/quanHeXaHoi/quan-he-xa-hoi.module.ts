@@ -8,4 +8,4 @@ import { PrismaService } from 'src/prisma.service';
   providers: [PrismaService, QuanHeXaHoiService],
   exports: [QuanHeXaHoiService],
 })
-export class QuanHeXaHoiModule {}
+export class QuanHeXaHoiModule { }

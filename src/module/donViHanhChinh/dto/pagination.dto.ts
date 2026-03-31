@@ -16,16 +16,16 @@ export class GetAllDonViHanhChinhDTO {
   @IsOptional()
   orderBy?: string;
 
-  @ApiPropertyOptional({ 
-    type: Number, 
+  @ApiPropertyOptional({
+    type: Number,
     description: 'Lọc theo cấp: 1 - Tỉnh/Thành phố, 2 - Xã/Phường',
   })
   @IsOptional()
   @IsNumberString()
   cap?: string;
 
-  @ApiPropertyOptional({ 
-    type: String, 
+  @ApiPropertyOptional({
+    type: String,
     description: 'ID Tỉnh/Thành phố để lọc Xã/Phường thuộc',
   })
   @IsOptional()

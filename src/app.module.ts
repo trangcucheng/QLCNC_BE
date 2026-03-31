@@ -27,6 +27,10 @@ import { QuanHeXaHoiModule } from './module/quanHeXaHoi/quan-he-xa-hoi.module';
 import { BieuMauModule } from './module/bieuMau/bieu-mau.module';
 import { ThongBaoModule } from './module/thongBao/thong-bao.module';
 import { CauHinhHeThongModule } from './module/cauHinhHeThong/cau-hinh-he-thong.module';
+import { HoSoDoiTuongModule } from './module/hoSoDoiTuong/ho-so-doi-tuong.module';
+import { HoSoVuViecModule } from './module/hoSoVuViec/ho-so-vu-viec.module';
+import { TaiLieuModule } from './module/taiLieu/tai-lieu.module';
+import { BaoCaoModule } from './module/baoCao/bao-cao.module';
 
 @Module({
   imports: [
@@ -59,6 +63,10 @@ import { CauHinhHeThongModule } from './module/cauHinhHeThong/cau-hinh-he-thong.
     BieuMauModule,
     ThongBaoModule,
     CauHinhHeThongModule,
+    HoSoDoiTuongModule,
+    HoSoVuViecModule,
+    TaiLieuModule,
+    BaoCaoModule,
   ],
   controllers: [AppController],
   providers: [
@@ -88,4 +96,4 @@ import { CauHinhHeThongModule } from './module/cauHinhHeThong/cau-hinh-he-thong.
     },
   ],
 })
-export class AppModule {}
+export class AppModule { }

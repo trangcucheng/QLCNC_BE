@@ -8,7 +8,7 @@ import { Prisma, DonViHanhChinh } from '@prisma/client';
 
 @Injectable()
 export class DonViHanhChinhService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   // Lấy tất cả đơn vị hành chính với phân trang và bộ lọc
   async getAllDonViHanhChinh(
@@ -21,15 +21,15 @@ export class DonViHanhChinhService {
       orderBy?: Prisma.DonViHanhChinhOrderByWithRelationInput;
     } = {},
   ): Promise<{ data: DonViHanhChinh[]; total: number }> {
-    const { 
-      page = 1, 
-      pageSize = 10, 
+    const {
+      page = 1,
+      pageSize = 10,
       cap,
       tinhThanhPhoId,
-      where, 
-      orderBy 
+      where,
+      orderBy
     } = params;
-    
+
     const skip = (page - 1) * pageSize;
     const take = pageSize;
 
@@ -79,7 +79,7 @@ export class DonViHanhChinhService {
     const tree = await Promise.all(
       tinhThanhPho.map(async (tinh) => {
         const xaPhuong = await this.prisma.donViHanhChinh.findMany({
-          where: { 
+          where: {
             cap: 2,
             tinhThanhPhoId: tinh.id,
           },
@@ -134,7 +134,7 @@ export class DonViHanhChinhService {
 
     const [data, total] = await Promise.all([
       this.prisma.donViHanhChinh.findMany({
-        where: { 
+        where: {
           cap: 2,
           tinhThanhPhoId,
         },
@@ -143,7 +143,7 @@ export class DonViHanhChinhService {
         orderBy: orderBy || { ten: 'asc' },
       }),
       this.prisma.donViHanhChinh.count({
-        where: { 
+        where: {
           cap: 2,
           tinhThanhPhoId,
         },

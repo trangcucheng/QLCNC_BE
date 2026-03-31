@@ -8,4 +8,4 @@ import { PrismaService } from 'src/prisma.service';
   providers: [PrismaService, DonViHanhChinhService],
   exports: [DonViHanhChinhService], // Export service để sử dụng ở module khác
 })
-export class DonViHanhChinhModule {}
+export class DonViHanhChinhModule { }

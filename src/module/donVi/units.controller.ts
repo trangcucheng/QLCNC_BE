@@ -27,7 +27,7 @@ import { Public } from 'src/decorator/public.decorator';
 @ApiBearerAuth('access-token') // Use the name defined in main.ts
 @Controller('units')
 export class UnitsController {
-  constructor(private unitService: UnitsService) {}
+  constructor(private unitService: UnitsService) { }
 
   @Get('/list-all-unit')
   @Permissions('VIEW_UNIT')

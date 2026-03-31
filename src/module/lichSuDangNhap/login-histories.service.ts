@@ -5,7 +5,7 @@ import { Response } from 'express';
 
 @Injectable()
 export class LoginHistoryService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async getLoginHistoryByUser(nguoiDungId: string) {
     return this.prisma.lichSuDangNhap.findMany({

@@ -8,4 +8,4 @@ import { PrismaService } from 'src/prisma.service';
   providers: [PrismaService, ToimDanhService],
   exports: [ToimDanhService],
 })
-export class ToimDanhModule {}
+export class ToimDanhModule { }

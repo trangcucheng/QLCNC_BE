@@ -3,7 +3,7 @@ import { PrismaService } from 'src/prisma.service';
 
 @Injectable()
 export class BlacklistService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async isBlacklisted(token: string) {
     return await this.prisma.danhSachDen.findFirst({

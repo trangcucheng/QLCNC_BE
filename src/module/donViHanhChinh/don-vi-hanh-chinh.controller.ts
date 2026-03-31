@@ -22,7 +22,7 @@ import { Permissions } from 'src/decorator/permissions.decorator';
 @ApiTags('Đơn vị hành chính')
 @Controller('don-vi-hanh-chinh')
 export class DonViHanhChinhController {
-  constructor(private donViHanhChinhService: DonViHanhChinhService) {}
+  constructor(private donViHanhChinhService: DonViHanhChinhService) { }
 
   @Get('/list-all')
   @Permissions('VIEW_DON_VI_HANH_CHINH')
@@ -30,9 +30,9 @@ export class DonViHanhChinhController {
   async getAllDonViHanhChinh(
     @Query() query: GetAllDonViHanhChinhDTO,
   ): Promise<{ data: DonViHanhChinh[]; total: number }> {
-    const { 
-      page = '1', 
-      pageSize = '10', 
+    const {
+      page = '1',
+      pageSize = '10',
       orderBy,
       cap,
       tinhThanhPhoId,

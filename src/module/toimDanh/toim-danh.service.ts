@@ -8,7 +8,7 @@ import { Prisma, ToimDanh } from '@prisma/client';
 
 @Injectable()
 export class ToimDanhService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async getAllToimDanh(
     params: {

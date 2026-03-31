@@ -14,7 +14,7 @@ import {
 
 @Injectable()
 export class ExportService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async exportUsersPdf() {
     const users = await this.prisma.nguoiDung.findMany({

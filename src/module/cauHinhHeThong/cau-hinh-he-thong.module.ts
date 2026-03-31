@@ -41,7 +41,7 @@ export class UpdateCauHinhDTO {
 // Service
 @Injectable()
 export class CauHinhHeThongService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async getAll() {
     return this.prisma.cauHinhHeThong.findMany({
@@ -88,7 +88,7 @@ export class CauHinhHeThongService {
 @ApiTags('Cấu hình hệ thống')
 @Controller('cau-hinh')
 export class CauHinhHeThongController {
-  constructor(private service: CauHinhHeThongService) {}
+  constructor(private service: CauHinhHeThongService) { }
 
   @Get('/list-all')
   @Permissions('VIEW_CAU_HINH')
@@ -135,4 +135,4 @@ export class CauHinhHeThongController {
   providers: [PrismaService, CauHinhHeThongService],
   exports: [CauHinhHeThongService],
 })
-export class CauHinhHeThongModule {}
+export class CauHinhHeThongModule { }

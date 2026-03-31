@@ -8,7 +8,7 @@ import { Permissions } from 'src/decorator/permissions.decorator';
 @ApiTags('Quan hệ xã hội')
 @Controller('quan-he-xa-hoi')
 export class QuanHeXaHoiController {
-  constructor(private service: QuanHeXaHoiService) {}
+  constructor(private service: QuanHeXaHoiService) { }
 
   @Get('/list-all')
   @Permissions('VIEW_QUAN_HE_XA_HOI')

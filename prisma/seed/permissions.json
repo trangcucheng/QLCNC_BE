@@ -1,17 +1,94 @@
 [
-  { "name": "CREATE_USER", "description": "Tạo user mới" },
-  { "name": "UPDATE_USER", "description": "Cập nhật user" },
-  { "name": "DELETE_USER", "description": "Xóa user" },
-  { "name": "VIEW_USER", "description": "Xem thông tin user" },
-  { "name": "BLOCK_USER", "description": "Khóa tài khoản user" },
-  { "name": "ASSIGN_ROLE", "description": "Gán vai trò cho user" },
-  { "name": "CREATE_UNIT", "description": "Tạo đơn vị mới" },
-  { "name": "UPDATE_UNIT", "description": "Cập nhật đơn vị" },
-  { "name": "DELETE_UNIT", "description": "Xóa đơn vị" },
-  { "name": "DELETE_ALL_UNITS", "description": "Xóa tất cả đơn vị" },
-  { "name": "VIEW_UNIT", "description": "Xem thông tin đơn vị" },
-  { "name": "CREATE_ROLE", "description": "Tạo role mới" },
-  { "name": "UPDATE_ROLE", "description": "Cập nhật role" },
-  { "name": "DELETE_ROLE", "description": "Xóa role" },
-  { "name": "VIEW_ROLE", "description": "Xem thông tin role" }
+  {
+    "name": "ho-so-doi-tuong:read",
+    "description": "Xem danh sách đối tượng"
+  },
+  {
+    "name": "ho-so-doi-tuong:create",
+    "description": "Tạo đối tượng mới"
+  },
+  {
+    "name": "ho-so-doi-tuong:update",
+    "description": "Chỉnh sửa đối tượng"
+  },
+  {
+    "name": "ho-so-doi-tuong:delete",
+    "description": "Xóa đối tượng"
+  },
+  {
+    "name": "ho-so-vu-viec:read",
+    "description": "Xem danh sách vụ việc"
+  },
+  {
+    "name": "ho-so-vu-viec:create",
+    "description": "Tạo vụ việc mới"
+  },
+  {
+    "name": "ho-so-vu-viec:update",
+    "description": "Chỉnh sửa vụ việc"
+  },
+  {
+    "name": "ho-so-vu-viec:delete",
+    "description": "Xóa vụ việc"
+  },
+  {
+    "name": "bao-cao:read",
+    "description": "Xem báo cáo và thống kê"
+  },
+  {
+    "name": "bao-cao:export",
+    "description": "Xuất báo cáo (Excel, PDF, Word)"
+  },
+  {
+    "name": "users:read",
+    "description": "Xem danh sách người dùng"
+  },
+  {
+    "name": "users:create",
+    "description": "Tạo người dùng mới"
+  },
+  {
+    "name": "users:update",
+    "description": "Chỉnh sửa người dùng"
+  },
+  {
+    "name": "users:delete",
+    "description": "Xóa người dùng"
+  },
+  {
+    "name": "roles:read",
+    "description": "Xem vai trò"
+  },
+  {
+    "name": "roles:create",
+    "description": "Tạo vai trò mới"
+  },
+  {
+    "name": "roles:update",
+    "description": "Chỉnh sửa vai trò"
+  },
+  {
+    "name": "roles:delete",
+    "description": "Xóa vai trò"
+  },
+  {
+    "name": "backup:read",
+    "description": "Xem danh sách backup"
+  },
+  {
+    "name": "backup:create",
+    "description": "Tạo backup mới"
+  },
+  {
+    "name": "backup:restore",
+    "description": "Khôi phục từ backup"
+  },
+  {
+    "name": "settings:read",
+    "description": "Xem cấu hình hệ thống"
+  },
+  {
+    "name": "settings:update",
+    "description": "Cập nhật cấu hình hệ thống"
+  }
 ]

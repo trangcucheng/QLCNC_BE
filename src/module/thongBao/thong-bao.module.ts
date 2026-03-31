@@ -70,7 +70,7 @@ export class UpdateThongBaoDTO {
 // Service
 @Injectable()
 export class ThongBaoService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async getAll(params: { page?: number; pageSize?: number; trangThai?: boolean } = {}) {
     const { page = 1, pageSize = 10, trangThai } = params;
@@ -122,7 +122,7 @@ export class ThongBaoService {
 @ApiTags('Thông báo')
 @Controller('thong-bao')
 export class ThongBaoController {
-  constructor(private service: ThongBaoService) {}
+  constructor(private service: ThongBaoService) { }
 
   @Get('/list-all')
   @Permissions('VIEW_THONG_BAO')
@@ -176,4 +176,4 @@ export class ThongBaoController {
   providers: [PrismaService, ThongBaoService],
   exports: [ThongBaoService],
 })
-export class ThongBaoModule {}
+export class ThongBaoModule { }
