@@ -11,7 +11,7 @@ export class QuanHeXaHoiController {
   constructor(private service: QuanHeXaHoiService) { }
 
   @Get('/list-all')
-  @Permissions('VIEW_QUAN_HE_XA_HOI')
+  @Permissions('quan-he-xa-hoi:read')
   async getAll(@Query() query: GetAllQuanHeXaHoiDTO) {
     return this.service.getAll({
       page: Number(query.page) || 1,
@@ -21,25 +21,25 @@ export class QuanHeXaHoiController {
   }
 
   @Get('/:id')
-  @Permissions('VIEW_QUAN_HE_XA_HOI')
+  @Permissions('quan-he-xa-hoi:read')
   async getById(@Param('id') id: string) {
     return this.service.getById(id);
   }
 
   @Post('/create')
-  @Permissions('CREATE_QUAN_HE_XA_HOI')
+  @Permissions('quan-he-xa-hoi:create')
   async create(@Body() dto: CreateQuanHeXaHoiDTO) {
     return this.service.create(dto);
   }
 
   @Put('/:id')
-  @Permissions('UPDATE_QUAN_HE_XA_HOI')
+  @Permissions('quan-he-xa-hoi:update')
   async update(@Param('id') id: string, @Body() dto: UpdateQuanHeXaHoiDTO) {
     return this.service.update({ id }, dto);
   }
 
   @Delete('/:id')
-  @Permissions('DELETE_QUAN_HE_XA_HOI')
+  @Permissions('quan-he-xa-hoi:delete')
   async delete(@Param('id') id: string) {
     await this.service.delete({ id });
     return { status: 'success', message: 'Xóa thành công' };

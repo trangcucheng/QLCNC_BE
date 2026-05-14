@@ -1,11 +1,11 @@
-import { 
-  Controller, 
-  Get, 
-  Post, 
-  Body, 
-  Patch, 
-  Param, 
-  Delete, 
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
   Query,
   UseGuards,
   Request,
@@ -24,13 +24,13 @@ import { Permissions } from 'src/decorator/permissions.decorator';
 @Controller('ho-so-vu-viec')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class HoSoVuViecController {
-  constructor(private readonly hoSoVuViecService: HoSoVuViecService) {}
+  constructor(private readonly hoSoVuViecService: HoSoVuViecService) { }
 
   @Post()
   @Permissions('ho-so-vu-viec:create')
   @HttpCode(HttpStatus.CREATED)
   create(@Body() createDto: CreateHoSoVuViecDTO, @Request() req) {
-    return this.hoSoVuViecService.create(createDto, req.user.sub);
+    return this.hoSoVuViecService.create(createDto, req.user.id);
   }
 
   @Get()
@@ -78,7 +78,7 @@ export class HoSoVuViecController {
   @Patch(':id/trang-thai')
   @Permissions('ho-so-vu-viec:update')
   capNhatTrangThai(
-    @Param('id') id: string, 
+    @Param('id') id: string,
     @Body() capNhatDto: CapNhatTrangThaiDTO,
     @Request() req
   ) {

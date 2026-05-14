@@ -8,7 +8,7 @@ import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class HoSoVuViecService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   // Tạo mới hồ sơ vụ việc
   async create(createDto: CreateHoSoVuViecDTO, nguoiTaoId: string) {
@@ -93,7 +93,9 @@ export class HoSoVuViecService {
   // Lấy danh sách với phân trang và tìm kiếm
   async findAll(searchDto: SearchHoSoVuViecDTO) {
     const { page = 1, limit = 10, ...filters } = searchDto;
-    const skip = (page - 1) * limit;
+    const pageNum = Number(page) || 1;
+    const limitNum = Number(limit) || 10;
+    const skip = (pageNum - 1) * limitNum;
 
     // Xây dựng điều kiện tìm kiếm
     const where: Prisma.HoSoVuViecWhereInput = {};
@@ -167,7 +169,7 @@ export class HoSoVuViecService {
       this.prisma.hoSoVuViec.findMany({
         where,
         skip,
-        take: limit,
+        take: limitNum,
         orderBy: { ngayTao: 'desc' },
         include: {
           nguoiTao: {
@@ -203,9 +205,9 @@ export class HoSoVuViecService {
         items: data,
         pagination: {
           total,
-          page,
-          limit,
-          totalPages: Math.ceil(total / limit),
+          page: pageNum,
+          limit: limitNum,
+          totalPages: Math.ceil(total / limitNum),
         }
       }
     };

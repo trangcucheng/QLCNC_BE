@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsDateString, IsEnum, IsUUID } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsDateString, IsEnum, IsUUID, IsArray } from 'class-validator';
 import { GioiTinh, TrangThaiDoiTuong } from '@prisma/client';
 
 export class CreateHoSoDoiTuongDTO {
@@ -131,4 +131,9 @@ export class CreateHoSoDoiTuongDTO {
   @IsOptional()
   @IsString()
   anhDaiDien?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  fileAnh?: string[];
 }

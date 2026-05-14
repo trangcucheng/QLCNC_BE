@@ -25,7 +25,7 @@ export class ToimDanhController {
   constructor(private toimDanhService: ToimDanhService) { }
 
   @Get('/list-all')
-  @Permissions('VIEW_TOIM_DANH')
+  @Permissions('toi-danh:read')
   @ApiOperation({ summary: 'Lấy danh sách tội danh' })
   async getAllToimDanh(
     @Query() query: GetAllToimDanhDTO,
@@ -47,7 +47,7 @@ export class ToimDanhController {
   }
 
   @Get('/:id')
-  @Permissions('VIEW_TOIM_DANH')
+  @Permissions('toi-danh:read')
   @ApiOperation({ summary: 'Lấy chi tiết tội danh' })
   async getToimDanhById(@Param('id') id: string): Promise<ToimDanh> {
     const toimDanh = await this.toimDanhService.getToimDanhById(id);
@@ -58,7 +58,7 @@ export class ToimDanhController {
   }
 
   @Post('/create')
-  @Permissions('CREATE_TOIM_DANH')
+  @Permissions('toi-danh:create')
   @ApiOperation({ summary: 'Tạo mới tội danh' })
   async createToimDanh(
     @Body() createDTO: CreateToimDanhDTO,
@@ -67,7 +67,7 @@ export class ToimDanhController {
   }
 
   @Put('/:id')
-  @Permissions('UPDATE_TOIM_DANH')
+  @Permissions('toi-danh:update')
   @ApiOperation({ summary: 'Cập nhật tội danh' })
   async updateToimDanh(
     @Param('id') id: string,
@@ -83,7 +83,7 @@ export class ToimDanhController {
   }
 
   @Delete('/:id')
-  @Permissions('DELETE_TOIM_DANH')
+  @Permissions('toi-danh:delete')
   @ApiOperation({ summary: 'Xóa tội danh' })
   async deleteToimDanh(
     @Param('id') id: string,

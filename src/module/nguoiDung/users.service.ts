@@ -25,34 +25,41 @@ export class UsersService {
     pageSize: number;
     orderBy?: Prisma.NguoiDungOrderByWithRelationInput;
     role?: string;
-  }): Promise<NguoiDung[]> {
+  }): Promise<{ data: NguoiDung[]; total: number }> {
     const { page, pageSize, orderBy, role } = params;
 
-    return this.prisma.nguoiDung.findMany({
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      orderBy,
-      where: {
-        ...(role
-          ? {
-            vaiTroNguoiDung: {
-              some: {
-                vaiTro: {
-                  tenVaiTro: role,
-                },
+    const where = {
+      ...(role
+        ? {
+          vaiTroNguoiDung: {
+            some: {
+              vaiTro: {
+                tenVaiTro: role,
               },
             },
-          }
-          : {}),
-      },
-      include: {
-        vaiTroNguoiDung: {
-          include: {
-            vaiTro: true,
+          },
+        }
+        : {}),
+    };
+
+    const [data, total] = await Promise.all([
+      this.prisma.nguoiDung.findMany({
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        orderBy,
+        where,
+        include: {
+          vaiTroNguoiDung: {
+            include: {
+              vaiTro: true,
+            },
           },
         },
-      },
-    });
+      }),
+      this.prisma.nguoiDung.count({ where }),
+    ]);
+
+    return { data, total };
   }
 
   async createUser(payload: CreateUserDTO): Promise<SignupResponse> {

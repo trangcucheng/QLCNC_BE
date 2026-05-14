@@ -1,85 +1,190 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { exec } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 
 @Injectable()
 export class BackupService {
-  async backupDatabase() {
-    const backupFile = `backup_${new Date()
-      .toISOString()
-      .replace(/[:.]/g, '-')}.sql`;
+  constructor(private configService: ConfigService) { }
 
-    const backupDir = path.join(__dirname, 'backups');
+  private getBackupDir(): string {
+    return path.join(process.cwd(), 'log', 'backup');
+  }
 
-    if (!fs.existsSync(backupDir)) {
-      fs.mkdirSync(backupDir, { recursive: true }); // tạo cả thư mục cha nếu chưa có
+  private formatBytes(bytes: number): string {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  }
+
+  async listBackups() {
+    try {
+      const backupDir = this.getBackupDir();
+
+      if (!fs.existsSync(backupDir)) {
+        fs.mkdirSync(backupDir, { recursive: true });
+        return {
+          statusCode: 200,
+          message: 'Danh sách backup',
+          data: [],
+          total: 0,
+        };
+      }
+
+      const files = fs.readdirSync(backupDir).filter(file => file.endsWith('.sql'));
+
+      const backupList = files.map(fileName => {
+        const filePath = path.join(backupDir, fileName);
+        const stats = fs.statSync(filePath);
+        return {
+          fileName,
+          fileSize: this.formatBytes(stats.size),
+          createdAt: stats.birthtime.toLocaleDateString('vi-VN', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+          }),
+          timestamp: stats.birthtime.getTime(),
+        };
+      });
+
+      // Sort by newest first
+      backupList.sort((a, b) => b.timestamp - a.timestamp);
+
+      return {
+        statusCode: 200,
+        message: 'Danh sách backup',
+        data: backupList,
+        total: backupList.length,
+      };
+    } catch (error) {
+      console.error('[List Backups] Error:', error);
+      return {
+        statusCode: 500,
+        message: 'Lỗi khi lấy danh sách backup',
+        error: error.message,
+      };
     }
+  }
 
-    const backupPath = path.join(
-      backupDir,
-      `backup_${new Date().toISOString().replace(/:/g, '-')}.sql`,
-    );
+  private getMySqlCommand(command: string): string {
+    const mysqlBinPath = this.configService.get<string>('MYSQL_BIN_PATH');
+    if (mysqlBinPath && mysqlBinPath.trim()) {
+      return path.join(mysqlBinPath, command);
+    }
+    return command;
+  }
 
-    // 🔧 Command pg_dump (sửa thông tin DB của bạn)
-    const command = `pg_dump -h localhost -p 5432 -U postgres -d pmql_dt -F c -b -v -f ${backupPath}`;
+  async backupDatabase() {
+    try {
+      const backupDir = this.getBackupDir();
 
-    return new Promise((resolve, reject) => {
-      exec(
-        command,
-        { env: { ...process.env, PG_PASSWORD: '1' } },
-        (error, stdout, stderr) => {
+      if (!fs.existsSync(backupDir)) {
+        fs.mkdirSync(backupDir, { recursive: true });
+      }
+
+      const backupFileName = `backup_${new Date().toISOString().replace(/[:.]/g, '-')}.sql`;
+      const backupPath = path.join(backupDir, backupFileName);
+
+      const dbHost = this.configService.get<string>('DB_HOST');
+      const dbPort = this.configService.get<string>('DB_PORT');
+      const dbUser = this.configService.get<string>('DB_USER');
+      const dbPassword = this.configService.get<string>('DB_PASSWORD');
+      const dbName = this.configService.get<string>('DB_NAME');
+
+      // MySQL backup command with configurable path
+      const mysqldump = this.getMySqlCommand('mysqldump');
+      const command = `"${mysqldump}" -h ${dbHost} -P ${dbPort} -u ${dbUser} -p${dbPassword} ${dbName} > "${backupPath}"`;
+
+      console.log('[Backup] Creating backup...');
+
+      return new Promise((resolve, reject) => {
+        exec(command, (error, stdout, stderr) => {
           if (error) {
-            console.error(`Backup error: ${stderr}`);
-            reject(error);
+            console.error('[Backup] Error:', stderr || error.message);
+            reject({
+              statusCode: 500,
+              message: 'Sao lưu dữ liệu thất bại',
+              error: stderr || error.message,
+            });
           } else {
-            console.log(`Backup created at ${backupPath}`);
-            resolve({ status: 'success', file: backupFile });
+            console.log('[Backup] Success:', backupPath);
+            resolve({
+              statusCode: 200,
+              message: 'Sao lưu dữ liệu thành công',
+              data: { fileName: backupFileName },
+            });
           }
-        },
-      );
-    });
+        });
+      });
+    } catch (err) {
+      console.error('[Backup] Exception:', err.message);
+      return {
+        statusCode: 500,
+        message: err.message,
+      };
+    }
   }
 
   async restoreDatabase(backupFileName: string) {
     try {
       if (!backupFileName) {
-        throw new Error('Backup file name is required.');
+        throw new Error('Tên file backup là bắt buộc');
       }
-      const backupDir = path.resolve(__dirname, 'backups');
+
+      const backupDir = this.getBackupDir();
       const backupPath = path.join(backupDir, backupFileName);
 
       console.log('[Restore] Backup directory:', backupDir);
       console.log('[Restore] Backup file path:', backupPath);
 
-      // 🔍 Kiểm tra file tồn tại
       if (!fs.existsSync(backupPath)) {
-        throw new Error(`Backup file not found: ${backupPath}`);
+        throw new Error(`Không tìm thấy file backup: ${backupFileName}`);
       }
 
-      // 🔧 Command pg_restore
-      const command = `pg_restore -h localhost -p 5432 -U postgres -d pmql_dt --clean --no-owner --verbose "${backupPath}"`;
+      const dbHost = this.configService.get<string>('DB_HOST');
+      const dbPort = this.configService.get<string>('DB_PORT');
+      const dbUser = this.configService.get<string>('DB_USER');
+      const dbPassword = this.configService.get<string>('DB_PASSWORD');
+      const dbName = this.configService.get<string>('DB_NAME');
 
-      console.log('[Restore] Running command:', command);
+      // MySQL restore command with configurable path
+      const mysql = this.getMySqlCommand('mysql');
+      const command = `"${mysql}" -h ${dbHost} -P ${dbPort} -u ${dbUser} -p${dbPassword} ${dbName} < "${backupPath}"`;
+
+      console.log('[Restore] Running restore...');
 
       return new Promise((resolve, reject) => {
-        exec(
-          command,
-          { env: { ...process.env, PGPASSWORD: '1' } }, // ✅ PGPASSWORD đúng tên biến env
-          (error, stdout, stderr) => {
-            if (error) {
-              console.error('[Restore] Error:', stderr || error.message);
-              reject({ status: 'error', message: stderr || error.message });
-            } else {
-              console.log('[Restore] Success:', stdout);
-              resolve({ status: 'success', file: backupFileName });
-            }
-          },
-        );
+        exec(command, (error, stdout, stderr) => {
+          if (error) {
+            console.error('[Restore] Error:', stderr || error.message);
+            reject({
+              statusCode: 500,
+              message: 'Khôi phục dữ liệu thất bại',
+              error: stderr || error.message,
+            });
+          } else {
+            console.log('[Restore] Success');
+            resolve({
+              statusCode: 200,
+              message: 'Khôi phục dữ liệu thành công',
+              data: { fileName: backupFileName },
+            });
+          }
+        });
       });
     } catch (err) {
       console.error('[Restore] Exception:', err.message);
-      return { status: 'error', message: err.message };
+      return {
+        statusCode: 500,
+        message: err.message,
+      };
     }
   }
 }

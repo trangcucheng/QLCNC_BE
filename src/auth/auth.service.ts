@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -12,12 +13,15 @@ import * as jwt from 'jsonwebtoken';
 import { ChangePasswordDTO } from './dto/change-password.dto';
 import { SignupResponse } from 'src/module/nguoiDung/user';
 import { CreateUserDTO } from 'src/module/nguoiDung/dto/create-user.dto';
+import { UpdateProfileDTO } from './dto/update-profile.dto';
 import { v4 as uuidv4 } from 'uuid';
 import { Request } from 'express';
 import { isValidEmail } from 'src/helper/util';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
@@ -87,27 +91,59 @@ export class AuthService {
       user: any;
     };
   }> {
+    // Retry logic for database connection
+    let retries = 3;
+    let user: any = null;
+    let lastError: any = null;
 
-    const user = await this.prisma.nguoiDung.findFirst({
-      where: {
-        email: loginDTO.email,
-      },
-      include: {
-        vaiTroNguoiDung: {
-          include: {
-            vaiTro: {
-              include: {
-                vaiTroQuyen: {
-                  include: {
-                    quyen: true,
+    while (retries > 0 && !user) {
+      try {
+        user = await this.prisma.nguoiDung.findFirst({
+          where: {
+            email: loginDTO.email,
+          },
+          select: {
+            id: true,
+            email: true,
+            hoTen: true,
+            matKhau: true,
+            trangThaiHoatDong: true,
+            loaiNguoiDung: true,
+            vaiTroNguoiDung: {
+              select: {
+                vaiTro: {
+                  select: {
+                    tenVaiTro: true,
+                    vaiTroQuyen: {
+                      select: {
+                        quyen: {
+                          select: {
+                            tenQuyen: true,
+                          },
+                        },
+                      },
+                    },
                   },
                 },
               },
             },
           },
-        },
-      },
-    });
+        });
+        break; // Success, exit retry loop
+      } catch (error) {
+        lastError = error;
+        retries--;
+        if (retries > 0) {
+          this.logger.warn(`Database connection failed, retrying... (${retries} attempts left)`);
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
+        }
+      }
+    }
+
+    if (!user && lastError) {
+      this.logger.error('Failed to connect to database after retries', lastError);
+      throw new UnauthorizedException('Service temporarily unavailable. Please try again.');
+    }
 
     if (!user || !user.trangThaiHoatDong) {
       throw new UnauthorizedException('User not found or blocked');
@@ -291,6 +327,98 @@ export class AuthService {
     });
 
     return { message: 'Logged out successfully' };
+  }
+
+  async updateProfile(userId: string, updateProfileDTO: UpdateProfileDTO) {
+    const user = await this.prisma.nguoiDung.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Nếu thay đổi email hoặc mật khẩu, yêu cầu xác nhận mật khẩu hiện tại
+    if ((updateProfileDTO.email && updateProfileDTO.email !== user.email) || updateProfileDTO.newPassword) {
+      if (!updateProfileDTO.currentPassword) {
+        throw new BadRequestException('Current password is required to change email or password');
+      }
+
+      const isPasswordValid = await this.decryptPassword(
+        updateProfileDTO.currentPassword,
+        user.matKhau,
+      );
+
+      if (!isPasswordValid) {
+        throw new UnauthorizedException('Current password is incorrect');
+      }
+    }
+
+    // Kiểm tra email đã tồn tại chưa (nếu đổi email)
+    if (updateProfileDTO.email && updateProfileDTO.email !== user.email) {
+      const existingUser = await this.prisma.nguoiDung.findUnique({
+        where: { email: updateProfileDTO.email },
+      });
+
+      if (existingUser) {
+        throw new BadRequestException('Email already exists');
+      }
+    }
+
+    // Chuẩn bị dữ liệu update
+    const dataToUpdate: any = {};
+
+    if (updateProfileDTO.hoTen) {
+      dataToUpdate.hoTen = updateProfileDTO.hoTen;
+    }
+
+    if (updateProfileDTO.email && updateProfileDTO.email !== user.email) {
+      dataToUpdate.email = updateProfileDTO.email;
+    }
+
+    if (updateProfileDTO.soDienThoai !== undefined) {
+      dataToUpdate.soDienThoai = updateProfileDTO.soDienThoai;
+    }
+
+    if (updateProfileDTO.newPassword) {
+      const hashedPassword = await this.encryptPassword(updateProfileDTO.newPassword, 10);
+      dataToUpdate.matKhau = hashedPassword;
+    }
+
+    // Update user
+    const updatedUser = await this.prisma.nguoiDung.update({
+      where: { id: userId },
+      data: dataToUpdate,
+      include: {
+        vaiTroNguoiDung: {
+          include: {
+            vaiTro: {
+              include: {
+                vaiTroQuyen: {
+                  include: {
+                    quyen: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Format response giống với login
+    const roles = updatedUser.vaiTroNguoiDung.map((vtn) => vtn.vaiTro.tenVaiTro);
+    const permissions = updatedUser.vaiTroNguoiDung.flatMap((vtn) =>
+      vtn.vaiTro.vaiTroQuyen.map((vtq) => vtq.quyen.tenQuyen),
+    );
+
+    const { matKhau, ...userWithoutPassword } = updatedUser;
+
+    return {
+      ...userWithoutPassword,
+      roles,
+      permissions,
+    };
   }
 
   async validateUser(payload: any) {

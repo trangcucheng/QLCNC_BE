@@ -6,7 +6,7 @@ import { Prisma, VaiTro } from '@prisma/client';
 
 @Injectable()
 export class RolesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async createRole(createRoleDTO: CreateRoleDTO) {
     const { name, description, permissionIds } = createRoleDTO;
@@ -90,5 +90,47 @@ export class RolesService {
       where: { id },
       include: { vaiTroQuyen: { include: { quyen: true } } },
     });
+  }
+
+  async getRolePermissions(roleId: string) {
+    const role = await this.prisma.vaiTro.findUnique({
+      where: { id: roleId },
+      include: {
+        vaiTroQuyen: {
+          include: {
+            quyen: true,
+          },
+        },
+      },
+    });
+
+    if (!role) {
+      throw new NotFoundException('Role not found');
+    }
+
+    return role.vaiTroQuyen.map((vq) => vq.quyen);
+  }
+
+  async assignPermissions(roleId: string, permissionIds: string[]) {
+    const role = await this.prisma.vaiTro.findUnique({ where: { id: roleId } });
+    if (!role) {
+      throw new NotFoundException('Role not found');
+    }
+
+    // Xóa tất cả permissions cũ
+    await this.prisma.vaiTroQuyen.deleteMany({
+      where: { vaiTroId: roleId },
+    });
+
+    // Thêm permissions mới
+    await this.prisma.vaiTroQuyen.createMany({
+      data: permissionIds.map((permissionId) => ({
+        vaiTroId: roleId,
+        quyenId: permissionId,
+      })),
+    });
+
+    // Trả về role với permissions mới
+    return await this.getRoleById(roleId);
   }
 }

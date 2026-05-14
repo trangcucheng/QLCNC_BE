@@ -7,7 +7,7 @@ import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class HoSoDoiTuongService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   // Tạo mới hồ sơ đối tượng
   async create(createDto: CreateHoSoDoiTuongDTO, nguoiTaoId: string) {
@@ -29,6 +29,7 @@ export class HoSoDoiTuongService {
           ngayCapCMND: createDto.ngayCapCMND ? new Date(createDto.ngayCapCMND) : null,
           ngayCapHoChieu: createDto.ngayCapHoChieu ? new Date(createDto.ngayCapHoChieu) : null,
           nguoiTaoId,
+          fileAnh: [], // Khởi tạo mảng rỗng cho JSON field
         },
         include: {
           nguoiTao: {
@@ -365,5 +366,74 @@ export class HoSoDoiTuongService {
         soLuong: item._count,
       })),
     };
+  }
+
+  // Upload nhiều ảnh cho đối tượng
+  async uploadAnh(id: string, fileUrls: string[]) {
+    try {
+      console.log('[Upload Anh] ID:', id);
+      console.log('[Upload Anh] File URLs:', fileUrls);
+
+      const existing = await this.prisma.hoSoDoiTuong.findUnique({
+        where: { id },
+        select: { fileAnh: true }
+      });
+
+      if (!existing) {
+        throw new NotFoundException('Không tìm thấy hồ sơ đối tượng');
+      }
+
+      console.log('[Upload Anh] Existing fileAnh:', existing.fileAnh);
+      console.log('[Upload Anh] Type:', typeof existing.fileAnh);
+
+      // Xử lý fileAnh - có thể là null, undefined, array, hoặc string (JsonValue from Prisma)
+      let currentFileAnh: string[] = [];
+      if (existing.fileAnh) {
+        if (Array.isArray(existing.fileAnh)) {
+          // Type guard: filter out non-string values to ensure type safety
+          currentFileAnh = existing.fileAnh.filter((item): item is string => typeof item === 'string');
+        } else if (typeof existing.fileAnh === 'string') {
+          try {
+            const parsed = JSON.parse(existing.fileAnh);
+            if (Array.isArray(parsed)) {
+              currentFileAnh = parsed.filter((item): item is string => typeof item === 'string');
+            }
+          } catch {
+            currentFileAnh = [];
+          }
+        }
+      }
+
+      const updatedFileAnh = [...currentFileAnh, ...fileUrls];
+      console.log('[Upload Anh] Updated fileAnh:', updatedFileAnh);
+
+      const updated = await this.prisma.hoSoDoiTuong.update({
+        where: { id },
+        data: { fileAnh: updatedFileAnh as any },
+        include: {
+          nguoiTao: {
+            select: {
+              id: true,
+              hoTen: true,
+              email: true,
+            }
+          }
+        }
+      });
+
+      console.log('[Upload Anh] Update result:', updated.fileAnh);
+
+      return {
+        statusCode: 200,
+        message: `Upload thành công ${fileUrls.length} ảnh`,
+        data: updated,
+      };
+    } catch (error) {
+      console.error('[Upload Anh] Error:', error);
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException('Có lỗi khi upload ảnh: ' + error.message);
+    }
   }
 }

@@ -37,7 +37,7 @@ export class UsersController {
   @Get('/list-all-user')
   @UseGuards(JwtAuthGuard)
   @Permissions('VIEW_USER')
-  async getAllUsers(@Query() query: GetAllUsersDto): Promise<NguoiDung[]> {
+  async getAllUsers(@Query() query: GetAllUsersDto): Promise<{ data: NguoiDung[]; total: number }> {
     const { page = '1', pageSize = '10', orderBy, role } = query;
 
     // Xử lý orderBy string (vd: 'createdAt:desc')

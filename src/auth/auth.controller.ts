@@ -20,6 +20,7 @@ import { ResetPasswordDTO } from './dto/reset-password.dto';
 import { AuthService } from './auth.service';
 import { AuthGuard } from '@nestjs/passport';
 import { ChangePasswordDTO } from './dto/change-password.dto';
+import { UpdateProfileDTO } from './dto/update-profile.dto';
 import { CreateUserDTO } from 'src/module/nguoiDung/dto/create-user.dto';
 import { JwtAuthGuard } from './passport/jwt-auth.guard';
 
@@ -87,6 +88,24 @@ export class AuthController {
     @Request() req: any,
     @Body() changePasswordDTO: ChangePasswordDTO,
   ) {
-    return this.authService.changePassword(req.user.sub, changePasswordDTO);
+    return this.authService.changePassword(req.user.id, changePasswordDTO);
+  }
+
+  @Put('/profile')
+  async updateProfile(
+    @Request() req: any,
+    @Body() updateProfileDTO: UpdateProfileDTO,
+  ) {
+    const updatedUser = await this.authService.updateProfile(
+      req.user.id,
+      updateProfileDTO,
+    );
+
+    return {
+      status: 'success',
+      statusCode: 200,
+      message: 'Profile updated successfully',
+      data: updatedUser,
+    };
   }
 }

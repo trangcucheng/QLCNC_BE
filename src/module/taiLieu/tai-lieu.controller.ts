@@ -10,11 +10,15 @@ import {
   HttpStatus,
   UseInterceptors,
   UploadedFile,
-  BadRequestException
+  BadRequestException,
+  Res,
+  StreamableFile
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
-import { extname } from 'path';
+import { extname, join } from 'path';
+import { createReadStream, existsSync } from 'fs';
+import { Response } from 'express';
 import { TaiLieuService } from './tai-lieu.service';
 import { CreateTaiLieuDoiTuongDTO, CreateTaiLieuVuViecDTO } from './dto/create-tai-lieu.dto';
 import { JwtAuthGuard } from 'src/auth/passport/jwt-auth.guard';
@@ -53,7 +57,7 @@ export class TaiLieuController {
     }
 
     const createDto: CreateTaiLieuDoiTuongDTO = {
-      doiTuongId: body.doiTuongId,
+      doiTuongId: body.hoSoDoiTuongId || body.doiTuongId,
       tenTaiLieu: body.tenTaiLieu || file.originalname,
       loaiTaiLieu: body.loaiTaiLieu,
       duongDan: file.path,
@@ -104,7 +108,7 @@ export class TaiLieuController {
     }
 
     const createDto: CreateTaiLieuVuViecDTO = {
-      vuViecId: body.vuViecId,
+      vuViecId: body.hoSoVuViecId || body.vuViecId,
       tenTaiLieu: body.tenTaiLieu || file.originalname,
       loaiTaiLieu: body.loaiTaiLieu,
       duongDan: file.path,
@@ -134,5 +138,31 @@ export class TaiLieuController {
   @Permissions('tai-lieu:read')
   thongKe() {
     return this.taiLieuService.thongKe();
+  }
+
+  // ===== DOWNLOAD/VIEW FILE =====
+
+  @Get('download/:type/:id')
+  @Permissions('tai-lieu:read')
+  async downloadFile(
+    @Param('type') type: 'doi-tuong' | 'vu-viec',
+    @Param('id') id: string,
+    @Res({ passthrough: true }) res: Response
+  ): Promise<StreamableFile> {
+    const fileInfo = await this.taiLieuService.getFileInfo(type, id);
+    
+    const filePath = join(process.cwd(), fileInfo.duongDan);
+    if (!existsSync(filePath)) {
+      throw new BadRequestException('File không tồn tại');
+    }
+
+    const file = createReadStream(filePath);
+    
+    res.set({
+      'Content-Type': 'application/octet-stream',
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(fileInfo.tenTaiLieu)}"`,
+    });
+
+    return new StreamableFile(file);
   }
 }

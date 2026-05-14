@@ -19,7 +19,7 @@ export class CustomAuthGuard implements CanActivate {
     private jwtService: JwtService,
     private configService: ConfigService,
     private reflector: Reflector,
-  ) {}
+  ) { }
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
@@ -45,17 +45,46 @@ export class CustomAuthGuard implements CanActivate {
       // 🔥 Check user exists & blocked status
       const user = await this.prisma.nguoiDung.findUnique({
         where: { id: payload.id },
+        include: {
+          vaiTroNguoiDung: {
+            include: {
+              vaiTro: {
+                include: {
+                  vaiTroQuyen: {
+                    include: {
+                      quyen: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
       });
 
       if (!user) {
         throw new UnauthorizedException('User not found');
       }
 
-      if (user.trangThaiHoatDong) {
+      if (!user.trangThaiHoatDong) {
         throw new UnauthorizedException('User is blocked');
       }
 
-      request['user'] = user; // attach full user object
+      // Extract roles and permissions
+      const roles = user.vaiTroNguoiDung.map((vtn) => vtn.vaiTro.tenVaiTro);
+      const permissions = [
+        ...new Set(
+          user.vaiTroNguoiDung.flatMap((vtn) =>
+            vtn.vaiTro.vaiTroQuyen.map((vtq) => vtq.quyen.tenQuyen),
+          ),
+        ),
+      ];
+
+      request['user'] = {
+        ...user,
+        roles,
+        permissions,
+      };
 
       // Optional: check token purpose
       if (payload.purpose && payload.purpose === 'reset') {

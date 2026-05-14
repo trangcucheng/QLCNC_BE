@@ -70,4 +70,19 @@ export class RolesController {
     }
     return role;
   }
+
+  @Get('/:roleId/permissions')
+  @Permissions('VIEW_ROLE')
+  async getRolePermissions(@Param('roleId') roleId: string) {
+    return this.roleService.getRolePermissions(roleId);
+  }
+
+  @Post('/:roleId/permissions')
+  @Permissions('ASSIGN_ROLE')
+  async assignPermissions(
+    @Param('roleId') roleId: string,
+    @Body() body: { permissionIds: string[] },
+  ) {
+    return this.roleService.assignPermissions(roleId, body.permissionIds);
+  }
 }

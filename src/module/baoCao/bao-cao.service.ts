@@ -4,12 +4,12 @@ import { BaoCaoQueryDTO } from './dto/bao-cao-query.dto';
 
 @Injectable()
 export class BaoCaoService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   // Dashboard tổng quan
   async getDashboard(query: BaoCaoQueryDTO) {
     const whereCondition: any = {};
-    
+
     if (query.tuNgay || query.denNgay) {
       whereCondition.ngayTao = {};
       if (query.tuNgay) whereCondition.ngayTao.gte = new Date(query.tuNgay);
@@ -27,17 +27,17 @@ export class BaoCaoService {
     ] = await Promise.all([
       this.prisma.hoSoDoiTuong.count({ where: whereCondition }),
       this.prisma.hoSoVuViec.count({ where: whereCondition }),
-      this.prisma.hoSoVuViec.count({ 
-        where: { ...whereCondition, trangThai: 'DANG_XU_LY' } 
+      this.prisma.hoSoVuViec.count({
+        where: { ...whereCondition, trangThai: 'DANG_XU_LY' }
       }),
-      this.prisma.hoSoVuViec.count({ 
-        where: { ...whereCondition, trangThai: 'HOAN_THANH' } 
+      this.prisma.hoSoVuViec.count({
+        where: { ...whereCondition, trangThai: 'HOAN_THANH' }
       }),
-      this.prisma.hoSoDoiTuong.count({ 
-        where: { ...whereCondition, trangThai: 'DANG_THEO_DOI' } 
+      this.prisma.hoSoDoiTuong.count({
+        where: { ...whereCondition, trangThai: 'DANG_THEO_DOI' }
       }),
-      this.prisma.hoSoDoiTuong.count({ 
-        where: { ...whereCondition, trangThai: 'TAM_GIAM' } 
+      this.prisma.hoSoDoiTuong.count({
+        where: { ...whereCondition, trangThai: 'TAM_GIAM' }
       }),
     ]);
 
@@ -82,15 +82,42 @@ export class BaoCaoService {
   // Báo cáo theo địa bàn
   async baoCaoTheoKhuVuc(query: BaoCaoQueryDTO) {
     const whereCondition: any = {};
-    
+
     if (query.tuNgay || query.denNgay) {
       whereCondition.ngayXayRa = {};
       if (query.tuNgay) whereCondition.ngayXayRa.gte = new Date(query.tuNgay);
       if (query.denNgay) whereCondition.ngayXayRa.lte = new Date(query.denNgay);
     }
 
+    // Xử lý filter theo đơn vị hành chính
     if (query.donViHanhChinhId) {
-      whereCondition.donViHanhChinhId = query.donViHanhChinhId;
+      // Kiểm tra đơn vị hành chính là cấp nào
+      const donVi = await this.prisma.donViHanhChinh.findUnique({
+        where: { id: query.donViHanhChinhId },
+      });
+
+      if (donVi) {
+        if (donVi.cap === 1) {
+          // Nếu là Tỉnh/Thành phố, tìm tất cả xã/phường thuộc tỉnh này
+          const xaPhuongs = await this.prisma.donViHanhChinh.findMany({
+            where: { tinhThanhPhoId: query.donViHanhChinhId },
+            select: { id: true },
+          });
+
+          const xaPhuongIds = xaPhuongs.map(x => x.id);
+
+          // Filter vụ việc theo cả tỉnh và các xã/phường
+          whereCondition.donViHanhChinhId = {
+            in: [query.donViHanhChinhId, ...xaPhuongIds]
+          };
+
+          console.log(`📍 Filter theo Tỉnh/TP: ${donVi.ten}, bao gồm ${xaPhuongIds.length} xã/phường`);
+        } else {
+          // Nếu là Xã/Phường, filter trực tiếp
+          whereCondition.donViHanhChinhId = query.donViHanhChinhId;
+          console.log(`📍 Filter theo Xã/Phường: ${donVi.ten}`);
+        }
+      }
     }
 
     const vuViecTheoKhuVuc = await this.prisma.hoSoVuViec.groupBy({
@@ -98,6 +125,8 @@ export class BaoCaoService {
       where: whereCondition,
       _count: true,
     });
+
+    console.log(`📊 Tìm thấy ${vuViecTheoKhuVuc.length} khu vực có dữ liệu`);
 
     const results = await Promise.all(
       vuViecTheoKhuVuc.map(async (item) => {
@@ -137,7 +166,7 @@ export class BaoCaoService {
   // Báo cáo theo tội danh
   async baoCaoTheoToimDanh(query: BaoCaoQueryDTO) {
     const whereCondition: any = {};
-    
+
     if (query.tuNgay || query.denNgay) {
       whereCondition.vuViec = {
         ngayXayRa: {}
@@ -178,7 +207,7 @@ export class BaoCaoService {
   // Báo cáo xu hướng theo thời gian
   async baoCaoXuHuong(query: BaoCaoQueryDTO) {
     const whereCondition: any = {};
-    
+
     if (query.tuNgay || query.denNgay) {
       whereCondition.ngayXayRa = {};
       if (query.tuNgay) whereCondition.ngayXayRa.gte = new Date(query.tuNgay);
@@ -201,7 +230,7 @@ export class BaoCaoService {
     const groupedByMonth = vuViec.reduce((acc, item) => {
       const date = new Date(item.ngayXayRa);
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      
+
       if (!acc[key]) {
         acc[key] = {
           thang: key,
@@ -211,13 +240,13 @@ export class BaoCaoService {
           dacBietNong: 0,
         };
       }
-      
+
       acc[key].tongSo++;
-      
+
       if (item.mucDoViPham === 'NONG') acc[key].nong++;
       else if (item.mucDoViPham === 'RAT_NONG') acc[key].ratNong++;
       else if (item.mucDoViPham === 'DAC_BIET_NONG') acc[key].dacBietNong++;
-      
+
       return acc;
     }, {} as Record<string, any>);
 
@@ -233,7 +262,7 @@ export class BaoCaoService {
   // Báo cáo tiến độ xử lý
   async baoCaoTienDo(query: BaoCaoQueryDTO) {
     const whereCondition: any = {};
-    
+
     if (query.tuNgay || query.denNgay) {
       whereCondition.ngayBatDauXuLy = {};
       if (query.tuNgay) whereCondition.ngayBatDauXuLy.gte = new Date(query.tuNgay);
@@ -282,7 +311,7 @@ export class BaoCaoService {
       data: {
         vuViecQuaHan: vuViecQuaHan.map(item => ({
           ...item,
-          soNgayXuLy: item.ngayBatDauXuLy 
+          soNgayXuLy: item.ngayBatDauXuLy
             ? Math.floor((now.getTime() - item.ngayBatDauXuLy.getTime()) / (1000 * 60 * 60 * 24))
             : 0,
         })),
@@ -316,7 +345,9 @@ export class BaoCaoService {
           denNgay: query.denNgay || 'Không giới hạn',
           ngayXuat: new Date().toISOString(),
         },
-        tongQuan: dashboard.data,
+        tongQuan: dashboard.data.tongQuan,
+        vuViecTheoMucDo: dashboard.data.vuViecTheoMucDo,
+        vuViecTheoTrangThai: dashboard.data.vuViecTheoTrangThai,
         theoKhuVuc: khuVuc.data,
         theoToimDanh: toimDanh.data,
         xuHuong: xuHuong.data,

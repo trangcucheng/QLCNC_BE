@@ -216,4 +216,25 @@ export class TaiLieuService {
       }
     };
   }
+
+  // Lấy thông tin file để download
+  async getFileInfo(type: 'doi-tuong' | 'vu-viec', id: string) {
+    let taiLieu;
+    
+    if (type === 'doi-tuong') {
+      taiLieu = await this.prisma.taiLieuDoiTuong.findUnique({
+        where: { id }
+      });
+    } else {
+      taiLieu = await this.prisma.taiLieuVuViec.findUnique({
+        where: { id }
+      });
+    }
+
+    if (!taiLieu) {
+      throw new NotFoundException('Không tìm thấy tài liệu');
+    }
+
+    return taiLieu;
+  }
 }

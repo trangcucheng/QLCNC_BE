@@ -40,6 +40,46 @@
     "description": "Xuất báo cáo (Excel, PDF, Word)"
   },
   {
+    "name": "VIEW_USER",
+    "description": "Xem danh sách người dùng"
+  },
+  {
+    "name": "CREATE_USER",
+    "description": "Tạo người dùng mới"
+  },
+  {
+    "name": "UPDATE_USER",
+    "description": "Cập nhật thông tin người dùng"
+  },
+  {
+    "name": "DELETE_USER",
+    "description": "Xóa người dùng"
+  },
+  {
+    "name": "BLOCK_USER",
+    "description": "Khóa/Mở khóa người dùng"
+  },
+  {
+    "name": "ASSIGN_ROLE",
+    "description": "Phân quyền cho người dùng"
+  },
+  {
+    "name": "VIEW_ROLE",
+    "description": "Xem danh sách vai trò"
+  },
+  {
+    "name": "CREATE_ROLE",
+    "description": "Tạo vai trò mới"
+  },
+  {
+    "name": "UPDATE_ROLE",
+    "description": "Cập nhật vai trò"
+  },
+  {
+    "name": "DELETE_ROLE",
+    "description": "Xóa vai trò"
+  },
+  {
     "name": "users:read",
     "description": "Xem danh sách người dùng"
   },
@@ -90,5 +130,221 @@
   {
     "name": "settings:update",
     "description": "Cập nhật cấu hình hệ thống"
+  },
+  {
+    "name": "tai-lieu:read",
+    "description": "Xem danh sách tài liệu"
+  },
+  {
+    "name": "tai-lieu:create",
+    "description": "Tải lên tài liệu mới"
+  },
+  {
+    "name": "tai-lieu:delete",
+    "description": "Xóa tài liệu"
+  },
+  {
+    "name": "VIEW_CAU_HINH",
+    "description": "Xem cấu hình hệ thống"
+  },
+  {
+    "name": "CREATE_CAU_HINH",
+    "description": "Tạo cấu hình mới"
+  },
+  {
+    "name": "UPDATE_CAU_HINH",
+    "description": "Cập nhật cấu hình hệ thống"
+  },
+  {
+    "name": "DELETE_CAU_HINH",
+    "description": "Xóa cấu hình"
+  },
+  {
+    "name": "VIEW_DON_VI_HANH_CHINH",
+    "description": "Xem danh sách đơn vị hành chính"
+  },
+  {
+    "name": "CREATE_DON_VI_HANH_CHINH",
+    "description": "Tạo đơn vị hành chính mới"
+  },
+  {
+    "name": "UPDATE_DON_VI_HANH_CHINH",
+    "description": "Cập nhật đơn vị hành chính"
+  },
+  {
+    "name": "DELETE_DON_VI_HANH_CHINH",
+    "description": "Xóa đơn vị hành chính"
+  },
+  {
+    "name": "don-vi:read",
+    "description": "Xem danh sách đơn vị hành chính"
+  },
+  {
+    "name": "don-vi:create",
+    "description": "Thêm đơn vị hành chính mới"
+  },
+  {
+    "name": "don-vi:update",
+    "description": "Cập nhật đơn vị hành chính"
+  },
+  {
+    "name": "don-vi:delete",
+    "description": "Xóa đơn vị hành chính"
+  },
+  {
+    "name": "toi-danh:read",
+    "description": "Xem danh sách tội danh"
+  },
+  {
+    "name": "toi-danh:create",
+    "description": "Tạo tội danh mới"
+  },
+  {
+    "name": "toi-danh:update",
+    "description": "Cập nhật tội danh"
+  },
+  {
+    "name": "toi-danh:delete",
+    "description": "Xóa tội danh"
+  },
+  {
+    "name": "quan-he-xa-hoi:read",
+    "description": "Xem danh sách quan hệ xã hội"
+  },
+  {
+    "name": "quan-he-xa-hoi:create",
+    "description": "Tạo quan hệ xã hội mới"
+  },
+  {
+    "name": "quan-he-xa-hoi:update",
+    "description": "Cập nhật quan hệ xã hội"
+  },
+  {
+    "name": "quan-he-xa-hoi:delete",
+    "description": "Xóa quan hệ xã hội"
+  },
+  {
+    "name": "VIEW_QUAN_HE_XA_HOI",
+    "description": "Xem danh sách quan hệ xã hội"
+  },
+  {
+    "name": "CREATE_QUAN_HE_XA_HOI",
+    "description": "Tạo quan hệ xã hội mới"
+  },
+  {
+    "name": "UPDATE_QUAN_HE_XA_HOI",
+    "description": "Cập nhật quan hệ xã hội"
+  },
+  {
+    "name": "DELETE_QUAN_HE_XA_HOI",
+    "description": "Xóa quan hệ xã hội"
+  },
+  {
+    "name": "danh-muc:read",
+    "description": "Xem danh mục hệ thống"
+  },
+  {
+    "name": "don-vi-to-chuc:read",
+    "description": "Xem danh sách đơn vị"
+  },
+  {
+    "name": "don-vi-to-chuc:create",
+    "description": "Tạo đơn vị mới"
+  },
+  {
+    "name": "don-vi-to-chuc:update",
+    "description": "Cập nhật đơn vị"
+  },
+  {
+    "name": "don-vi-to-chuc:delete",
+    "description": "Xóa đơn vị"
+  },
+  {
+    "name": "VIEW_UNIT",
+    "description": "Xem danh sách đơn vị"
+  },
+  {
+    "name": "CREATE_UNIT",
+    "description": "Tạo đơn vị mới"
+  },
+  {
+    "name": "UPDATE_UNIT",
+    "description": "Cập nhật đơn vị"
+  },
+  {
+    "name": "DELETE_UNIT",
+    "description": "Xóa đơn vị"
+  },
+  {
+    "name": "bieu-mau:read",
+    "description": "Xem danh sách biểu mẫu"
+  },
+  {
+    "name": "bieu-mau:create",
+    "description": "Tạo biểu mẫu mới"
+  },
+  {
+    "name": "bieu-mau:update",
+    "description": "Cập nhật biểu mẫu"
+  },
+  {
+    "name": "bieu-mau:delete",
+    "description": "Xóa biểu mẫu"
+  },
+  {
+    "name": "VIEW_BIEU_MAU",
+    "description": "Xem danh sách biểu mẫu"
+  },
+  {
+    "name": "CREATE_BIEU_MAU",
+    "description": "Tạo biểu mẫu mới"
+  },
+  {
+    "name": "UPDATE_BIEU_MAU",
+    "description": "Cập nhật biểu mẫu"
+  },
+  {
+    "name": "DELETE_BIEU_MAU",
+    "description": "Xóa biểu mẫu"
+  },
+  {
+    "name": "thong-bao:read",
+    "description": "Xem danh sách thông báo"
+  },
+  {
+    "name": "thong-bao:create",
+    "description": "Tạo thông báo mới"
+  },
+  {
+    "name": "thong-bao:update",
+    "description": "Cập nhật thông báo"
+  },
+  {
+    "name": "thong-bao:delete",
+    "description": "Xóa thông báo"
+  },
+  {
+    "name": "VIEW_THONG_BAO",
+    "description": "Xem danh sách thông báo"
+  },
+  {
+    "name": "CREATE_THONG_BAO",
+    "description": "Tạo thông báo mới"
+  },
+  {
+    "name": "UPDATE_THONG_BAO",
+    "description": "Cập nhật thông báo"
+  },
+  {
+    "name": "DELETE_THONG_BAO",
+    "description": "Xóa thông báo"
+  },
+  {
+    "name": "chatbot:read",
+    "description": "Sử dụng chatbot"
+  },
+  {
+    "name": "chatbot:manage",
+    "description": "Quản lý tài liệu chatbot"
   }
 ]
