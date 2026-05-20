@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { exec } from 'child_process';
+import { spawn } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -18,6 +18,35 @@ export class BackupService {
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  }
+
+  /**
+   * Kiểm tra có dùng WSL không (USE_WSL=true trong .env)
+   */
+  private useWsl(): boolean {
+    return this.configService.get<string>('USE_WSL') === 'true';
+  }
+
+  /**
+   * Build lệnh và args phù hợp với môi trường (WSL hoặc native)
+   * - WSL: wsl mysqldump [args...]
+   * - Native: mysqldump [args...]  (hoặc /path/to/mysqldump nếu có MYSQL_BIN_PATH)
+   */
+  private buildCommand(mysqlCommand: string, args: string[]): { cmd: string; args: string[] } {
+    if (this.useWsl()) {
+      return {
+        cmd: 'wsl',
+        args: [mysqlCommand, ...args],
+      };
+    }
+
+    const mysqlBinPath = this.configService.get<string>('MYSQL_BIN_PATH');
+    const fullCommand =
+      mysqlBinPath && mysqlBinPath.trim()
+        ? path.join(mysqlBinPath, mysqlCommand)
+        : mysqlCommand;
+
+    return { cmd: fullCommand, args };
   }
 
   async listBackups() {
@@ -73,18 +102,9 @@ export class BackupService {
     }
   }
 
-  private getMySqlCommand(command: string): string {
-    const mysqlBinPath = this.configService.get<string>('MYSQL_BIN_PATH');
-    if (mysqlBinPath && mysqlBinPath.trim()) {
-      return path.join(mysqlBinPath, command);
-    }
-    return command;
-  }
-
   async backupDatabase() {
     try {
       const backupDir = this.getBackupDir();
-
       if (!fs.existsSync(backupDir)) {
         fs.mkdirSync(backupDir, { recursive: true });
       }
@@ -92,26 +112,50 @@ export class BackupService {
       const backupFileName = `backup_${new Date().toISOString().replace(/[:.]/g, '-')}.sql`;
       const backupPath = path.join(backupDir, backupFileName);
 
-      const dbHost = this.configService.get<string>('DB_HOST');
-      const dbPort = this.configService.get<string>('DB_PORT');
-      const dbUser = this.configService.get<string>('DB_USER');
-      const dbPassword = this.configService.get<string>('DB_PASSWORD');
-      const dbName = this.configService.get<string>('DB_NAME');
+      const dbHost = this.configService.get<string>('DB_HOST') || '127.0.0.1';
+      const dbPort = this.configService.get<string>('DB_PORT') || '3306';
+      const dbUser = this.configService.get<string>('DB_USER') || '';
+      const dbPassword = this.configService.get<string>('DB_PASSWORD') || '';
+      const dbName = this.configService.get<string>('DB_NAME') || '';
 
-      // MySQL backup command with configurable path
-      const mysqldump = this.getMySqlCommand('mysqldump');
-      const command = `"${mysqldump}" -h ${dbHost} -P ${dbPort} -u ${dbUser} -p${dbPassword} ${dbName} > "${backupPath}"`;
+      const mysqldumpArgs = [
+        `-h`, dbHost,
+        `-P`, dbPort,
+        `-u`, dbUser,
+        `-p${dbPassword}`,
+        dbName,
+      ];
 
-      console.log('[Backup] Creating backup...');
+      const { cmd, args } = this.buildCommand('mysqldump', mysqldumpArgs);
+
+      console.log('[Backup] Creating backup...', this.useWsl() ? '(via WSL)' : '(native)');
 
       return new Promise((resolve, reject) => {
-        exec(command, (error, stdout, stderr) => {
-          if (error) {
-            console.error('[Backup] Error:', stderr || error.message);
+        const child = spawn(cmd, args, { shell: false });
+        const writeStream = fs.createWriteStream(backupPath);
+
+        // Pipe stdout (dữ liệu SQL) vào file
+        child.stdout.pipe(writeStream);
+
+        let stderrOutput = '';
+        child.stderr.on('data', (data) => {
+          const msg = data.toString();
+          // mysqldump thường in password warning ra stderr — bỏ qua
+          if (!msg.toLowerCase().includes('warning')) {
+            stderrOutput += msg;
+          }
+        });
+
+        child.on('close', (code) => {
+          writeStream.close();
+          if (code !== 0 && stderrOutput) {
+            console.error('[Backup] Error:', stderrOutput);
+            // Xóa file rỗng/lỗi nếu thất bại
+            if (fs.existsSync(backupPath)) fs.unlinkSync(backupPath);
             reject({
               statusCode: 500,
               message: 'Sao lưu dữ liệu thất bại',
-              error: stderr || error.message,
+              error: stderrOutput,
             });
           } else {
             console.log('[Backup] Success:', backupPath);
@@ -122,13 +166,23 @@ export class BackupService {
             });
           }
         });
+
+        child.on('error', (err) => {
+          writeStream.close();
+          if (fs.existsSync(backupPath)) fs.unlinkSync(backupPath);
+          console.error('[Backup] Spawn error:', err.message);
+          reject({
+            statusCode: 500,
+            message: this.useWsl()
+              ? 'Không tìm thấy mysqldump trong WSL. Chạy: sudo apt install mysql-client'
+              : 'Không tìm thấy mysqldump. Kiểm tra MYSQL_BIN_PATH trong .env',
+            error: err.message,
+          });
+        });
       });
     } catch (err) {
       console.error('[Backup] Exception:', err.message);
-      return {
-        statusCode: 500,
-        message: err.message,
-      };
+      return { statusCode: 500, message: err.message };
     }
   }
 
@@ -148,26 +202,46 @@ export class BackupService {
         throw new Error(`Không tìm thấy file backup: ${backupFileName}`);
       }
 
-      const dbHost = this.configService.get<string>('DB_HOST');
-      const dbPort = this.configService.get<string>('DB_PORT');
-      const dbUser = this.configService.get<string>('DB_USER');
-      const dbPassword = this.configService.get<string>('DB_PASSWORD');
-      const dbName = this.configService.get<string>('DB_NAME');
+      const dbHost = this.configService.get<string>('DB_HOST') || '127.0.0.1';
+      const dbPort = this.configService.get<string>('DB_PORT') || '3306';
+      const dbUser = this.configService.get<string>('DB_USER') || '';
+      const dbPassword = this.configService.get<string>('DB_PASSWORD') || '';
+      const dbName = this.configService.get<string>('DB_NAME') || '';
 
-      // MySQL restore command with configurable path
-      const mysql = this.getMySqlCommand('mysql');
-      const command = `"${mysql}" -h ${dbHost} -P ${dbPort} -u ${dbUser} -p${dbPassword} ${dbName} < "${backupPath}"`;
+      const mysqlArgs = [
+        `-h`, dbHost,
+        `-P`, dbPort,
+        `-u`, dbUser,
+        `-p${dbPassword}`,
+        dbName,
+      ];
 
-      console.log('[Restore] Running restore...');
+      const { cmd, args } = this.buildCommand('mysql', mysqlArgs);
+
+      console.log('[Restore] Running restore...', this.useWsl() ? '(via WSL)' : '(native)');
 
       return new Promise((resolve, reject) => {
-        exec(command, (error, stdout, stderr) => {
-          if (error) {
-            console.error('[Restore] Error:', stderr || error.message);
+        const child = spawn(cmd, args, { shell: false });
+
+        // Pipe file SQL vào stdin của mysql/wsl
+        const readStream = fs.createReadStream(backupPath);
+        readStream.pipe(child.stdin);
+
+        let stderrOutput = '';
+        child.stderr.on('data', (data) => {
+          const msg = data.toString();
+          if (!msg.toLowerCase().includes('warning')) {
+            stderrOutput += msg;
+          }
+        });
+
+        child.on('close', (code) => {
+          if (code !== 0 && stderrOutput) {
+            console.error('[Restore] Error:', stderrOutput);
             reject({
               statusCode: 500,
               message: 'Khôi phục dữ liệu thất bại',
-              error: stderr || error.message,
+              error: stderrOutput,
             });
           } else {
             console.log('[Restore] Success');
@@ -178,13 +252,21 @@ export class BackupService {
             });
           }
         });
+
+        child.on('error', (err) => {
+          console.error('[Restore] Spawn error:', err.message);
+          reject({
+            statusCode: 500,
+            message: this.useWsl()
+              ? 'Không tìm thấy mysql trong WSL. Chạy: sudo apt install mysql-client'
+              : 'Không tìm thấy mysql. Kiểm tra MYSQL_BIN_PATH trong .env',
+            error: err.message,
+          });
+        });
       });
     } catch (err) {
       console.error('[Restore] Exception:', err.message);
-      return {
-        statusCode: 500,
-        message: err.message,
-      };
+      return { statusCode: 500, message: err.message };
     }
   }
 }

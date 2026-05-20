@@ -24,10 +24,9 @@ export class BaoCaoExportService {
 
   // ===== EXCEL EXPORT =====
   async exportToExcel(query: BaoCaoQueryDTO): Promise<string> {
-    // Xác định loại báo cáo cần xuất
     let data: any;
-    let loaiBaoCao = query.loaiBaoCao || 'tong-hop';
-    
+    const loaiBaoCao = query.loaiBaoCao || 'tong-hop';
+
     if (loaiBaoCao === 'khu-vuc') {
       const baoCao = await this.baoCaoService.baoCaoTheoKhuVuc(query);
       data = { theoKhuVuc: baoCao.data, thoiGian: { tuNgay: query.tuNgay, denNgay: query.denNgay } };
@@ -43,114 +42,244 @@ export class BaoCaoExportService {
     workbook.creator = 'QLCNC System';
     workbook.created = new Date();
 
-    // Sheet 1: Tổng quan - chỉ tạo nếu có dữ liệu
+    // ─── Màu sắc ─────────────────────────────────────────────
+    const COLOR = {
+      headerBg: 'FF1E3A5F',  // xanh navy đậm
+      headerFont: 'FFFFFFFF',  // trắng
+      titleBg: 'FF2E6DA4',  // xanh dương
+      titleFont: 'FFFFFFFF',
+      evenRow: 'FFF0F4FA',  // xanh nhạt xen kẽ
+      oddRow: 'FFFFFFFF',  // trắng
+      totalBg: 'FFFFE0B2',  // cam nhạt cho dòng tổng
+      totalFont: 'FF7B3F00',  // nâu đậm
+      border: 'FFB0BEC5',  // xám nhạt
+    };
+
+    // ─── Helper: border mỏng cho cell ─────────────────────────
+    const thinBorder = (): Partial<ExcelJS.Borders> => ({
+      top: { style: 'thin', color: { argb: COLOR.border } },
+      left: { style: 'thin', color: { argb: COLOR.border } },
+      bottom: { style: 'thin', color: { argb: COLOR.border } },
+      right: { style: 'thin', color: { argb: COLOR.border } },
+    });
+
+    // ─── Helper: thêm dòng tiêu đề báo cáo (merge toàn chiều ngang) ──
+    const addReportTitle = (sheet: ExcelJS.Worksheet, title: string, colCount: number, tuNgay?: string, denNgay?: string) => {
+      // Dòng 1: Tên hệ thống
+      sheet.mergeCells(1, 1, 1, colCount);
+      const sysCell = sheet.getCell('A1');
+      sysCell.value = 'PHÒNG AN MINH MẠNG VÀ PHÒNG CHỐNG TỘI PHẠM CÔNG NGHỆ CAO - CÔNG AN TP ĐÀ NẴNG';
+      sysCell.font = { bold: true, size: 11, color: { argb: COLOR.titleFont }, name: 'Arial' };
+      sysCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.titleBg } };
+      sysCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      sheet.getRow(1).height = 24;
+
+      // Dòng 2: Tên báo cáo
+      sheet.mergeCells(2, 1, 2, colCount);
+      const titleCell = sheet.getCell('A2');
+      titleCell.value = title.toUpperCase();
+      titleCell.font = { bold: true, size: 14, color: { argb: COLOR.headerBg }, name: 'Arial' };
+      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
+      titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      sheet.getRow(2).height = 30;
+
+      // Dòng 3: Thời gian
+      if (tuNgay || denNgay) {
+        sheet.mergeCells(3, 1, 3, colCount);
+        const timeCell = sheet.getCell('A3');
+        const from = tuNgay ? `từ ${tuNgay}` : '';
+        const to = denNgay ? `đến ${denNgay}` : '';
+        timeCell.value = `Thời gian: ${[from, to].filter(Boolean).join(' ')}`;
+        timeCell.font = { italic: true, size: 10, color: { argb: 'FF546E7A' }, name: 'Arial' };
+        timeCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        sheet.getRow(3).height = 18;
+      }
+
+      // Dòng 4: trống
+      sheet.getRow(4).height = 8;
+
+      return tuNgay || denNgay ? 5 : 4; // dataStartRow
+    };
+
+    // ─── Helper: style dòng header cột ────────────────────────
+    const styleHeader = (sheet: ExcelJS.Worksheet, row: number, colCount: number) => {
+      const r = sheet.getRow(row);
+      r.height = 22;
+      for (let c = 1; c <= colCount; c++) {
+        const cell = r.getCell(c);
+        cell.font = { bold: true, size: 11, color: { argb: COLOR.headerFont }, name: 'Arial' };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.headerBg } };
+        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        cell.border = thinBorder();
+      }
+    };
+
+    // ─── Helper: style dòng data xen kẽ màu ──────────────────
+    const styleDataRows = (sheet: ExcelJS.Worksheet, fromRow: number, toRow: number, colCount: number, numericCols: number[] = []) => {
+      for (let r = fromRow; r <= toRow; r++) {
+        const row = sheet.getRow(r);
+        row.height = 18;
+        const isEven = (r - fromRow) % 2 === 0;
+        for (let c = 1; c <= colCount; c++) {
+          const cell = row.getCell(c);
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: isEven ? COLOR.evenRow : COLOR.oddRow } };
+          cell.font = { size: 10, name: 'Arial' };
+          cell.border = thinBorder();
+          cell.alignment = {
+            horizontal: numericCols.includes(c) ? 'right' : 'left',
+            vertical: 'middle',
+          };
+        }
+      }
+    };
+
+    // ─── Helper: thêm dòng tổng cuối bảng ────────────────────
+    const addTotalRow = (sheet: ExcelJS.Worksheet, rowIndex: number, label: string, values: (number | string)[], colCount: number) => {
+      const row = sheet.getRow(rowIndex);
+      row.height = 20;
+      row.getCell(1).value = label;
+      values.forEach((v, i) => { row.getCell(i + 2).value = v; });
+      for (let c = 1; c <= colCount; c++) {
+        const cell = row.getCell(c);
+        cell.font = { bold: true, size: 10, color: { argb: COLOR.totalFont }, name: 'Arial' };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.totalBg } };
+        cell.border = thinBorder();
+        cell.alignment = { horizontal: c === 1 ? 'left' : 'right', vertical: 'middle' };
+      }
+    };
+
+    // ════════════════════════════════════════════════════════════
+    // SHEET 1: TỔNG QUAN
+    // ════════════════════════════════════════════════════════════
     if (data.tongQuan) {
-      const sheetTongQuan = workbook.addWorksheet('Tổng quan');
-      sheetTongQuan.columns = [
-        { header: 'Chỉ tiêu', key: 'chiTieu', width: 40 },
-        { header: 'Giá trị', key: 'giaTri', width: 20 },
+      const sheet = workbook.addWorksheet('Tổng quan');
+      sheet.columns = [
+        { key: 'chiTieu', width: 45 },
+        { key: 'giaTri', width: 20 },
       ];
 
-      // Header style
-      sheetTongQuan.getRow(1).font = { bold: true, size: 12 };
-      sheetTongQuan.getRow(1).fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FF4472C4' },
-      };
-      sheetTongQuan.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      const dataStartRow = addReportTitle(sheet, 'Báo cáo tổng quan', 2, query.tuNgay, query.denNgay);
+      sheet.getRow(dataStartRow).values = ['Chỉ tiêu', 'Giá trị'];
+      styleHeader(sheet, dataStartRow, 2);
 
-      // Add data
-      const tongQuan = data.tongQuan;
-      sheetTongQuan.addRows([
-        { chiTieu: 'Tổng số đối tượng', giaTri: tongQuan.tongDoiTuong || 0 },
-        { chiTieu: 'Tổng số vụ việc', giaTri: tongQuan.tongVuViec || 0 },
-        { chiTieu: 'Vụ việc đang xử lý', giaTri: tongQuan.vuViecDangXuLy || 0 },
-        { chiTieu: 'Vụ việc hoàn thành', giaTri: tongQuan.vuViecHoanThanh || 0 },
-        { chiTieu: 'Đối tượng đang theo dõi', giaTri: tongQuan.doiTuongDangTheoDoi || 0 },
-        { chiTieu: 'Đối tượng tạm giam', giaTri: tongQuan.doiTuongTamGiam || 0 },
-      ]);
+      const rows = [
+        ['Tổng số đối tượng', data.tongQuan.tongDoiTuong ?? 0],
+        ['Tổng số vụ việc', data.tongQuan.tongVuViec ?? 0],
+        ['Vụ việc đang xử lý', data.tongQuan.vuViecDangXuLy ?? 0],
+        ['Vụ việc hoàn thành', data.tongQuan.vuViecHoanThanh ?? 0],
+        ['Đối tượng đang theo dõi', data.tongQuan.doiTuongDangTheoDoi ?? 0],
+        ['Đối tượng tạm giam', data.tongQuan.doiTuongTamGiam ?? 0],
+      ];
+
+      rows.forEach(([label, value], i) => {
+        sheet.getRow(dataStartRow + 1 + i).values = [label, value];
+      });
+
+      styleDataRows(sheet, dataStartRow + 1, dataStartRow + rows.length, 2, [2]);
     }
 
-    // Sheet 2: Theo khu vực
+    // ════════════════════════════════════════════════════════════
+    // SHEET 2: THEO KHU VỰC
+    // ════════════════════════════════════════════════════════════
     if (data.theoKhuVuc && data.theoKhuVuc.length > 0) {
-      const sheetKhuVuc = workbook.addWorksheet('Theo khu vực');
-      sheetKhuVuc.columns = [
-        { header: 'Tỉnh/Thành phố', key: 'ten', width: 30 },
-        { header: 'Số lượng đối tượng', key: 'soLuong', width: 20 },
-        { header: 'Tỷ lệ %', key: 'tyLe', width: 15 },
+      const sheet = workbook.addWorksheet('Theo khu vực');
+      sheet.columns = [
+        { key: 'stt', width: 8 },
+        { key: 'tenKhuVuc', width: 35 },
+        { key: 'soLuongDoiTuong', width: 22 },
+        { key: 'soLuongVuViec', width: 20 },
+        { key: 'tyLe', width: 12 },
       ];
 
-      sheetKhuVuc.getRow(1).font = { bold: true, size: 12 };
-      sheetKhuVuc.getRow(1).fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FF4472C4' },
-      };
-      sheetKhuVuc.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      const dataStartRow = addReportTitle(sheet, 'Báo cáo theo khu vực', 5, query.tuNgay, query.denNgay);
+      sheet.getRow(dataStartRow).values = ['STT', 'Xã / Phường', 'Số lượng đối tượng', 'Số lượng vụ việc', 'Tỷ lệ %'];
+      styleHeader(sheet, dataStartRow, 5);
 
-      sheetKhuVuc.addRows(
-        data.theoKhuVuc.map((item: any) => ({
-          ten: item.ten,
-          soLuong: item.soLuong,
-          tyLe: item.tyLe ? `${item.tyLe.toFixed(2)}%` : '0%',
-        }))
-      );
+      let tongDoiTuong = 0;
+      let tongVuViec = 0;
+
+      data.theoKhuVuc.forEach((item: any, index: number) => {
+        const r = dataStartRow + 1 + index;
+        tongDoiTuong += item.soLuongDoiTuong || 0;
+        tongVuViec += item.soLuongVuViec || 0;
+        sheet.getRow(r).values = [
+          index + 1,
+          item.tenKhuVuc,
+          item.soLuongDoiTuong ?? 0,
+          item.soLuongVuViec ?? 0,
+          item.tyLe != null ? `${Number(item.tyLe).toFixed(2)}%` : '0%',
+        ];
+      });
+
+      const lastDataRow = dataStartRow + data.theoKhuVuc.length;
+      styleDataRows(sheet, dataStartRow + 1, lastDataRow, 5, [1, 3, 4]);
+      addTotalRow(sheet, lastDataRow + 1, 'Tổng cộng', [tongDoiTuong, tongVuViec, '100%'], 5);
     }
 
-    // Sheet 3: Theo tội danh
+    // ════════════════════════════════════════════════════════════
+    // SHEET 3: THEO TỘI DANH
+    // ════════════════════════════════════════════════════════════
     if (data.theoToimDanh && data.theoToimDanh.length > 0) {
-      const sheetToimDanh = workbook.addWorksheet('Theo tội danh');
-      sheetToimDanh.columns = [
-        { header: 'Tội danh', key: 'ten', width: 40 },
-        { header: 'Số lượng', key: 'soLuong', width: 15 },
-        { header: 'Tỷ lệ %', key: 'tyLe', width: 15 },
+      const sheet = workbook.addWorksheet('Theo tội danh');
+      sheet.columns = [
+        { key: 'stt', width: 8 },
+        { key: 'ten', width: 45 },
+        { key: 'soLuong', width: 18 },
+        { key: 'tyLe', width: 12 },
       ];
 
-      sheetToimDanh.getRow(1).font = { bold: true, size: 12 };
-      sheetToimDanh.getRow(1).fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FF4472C4' },
-      };
-      sheetToimDanh.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      const dataStartRow = addReportTitle(sheet, 'Báo cáo theo tội danh', 4, query.tuNgay, query.denNgay);
+      sheet.getRow(dataStartRow).values = ['STT', 'Tội danh', 'Số lượng', 'Tỷ lệ %'];
+      styleHeader(sheet, dataStartRow, 4);
 
-      sheetToimDanh.addRows(
-        data.theoToimDanh.map((item: any) => ({
-          ten: item.ten,
-          soLuong: item.soLuong,
-          tyLe: item.tyLe ? `${item.tyLe.toFixed(2)}%` : '0%',
-        }))
-      );
+      let tongSoLuong = 0;
+
+      data.theoToimDanh.forEach((item: any, index: number) => {
+        const r = dataStartRow + 1 + index;
+        tongSoLuong += item.soLuong || 0;
+        sheet.getRow(r).values = [
+          index + 1,
+          item.ten,
+          item.soLuong ?? 0,
+          item.tyLe != null ? `${Number(item.tyLe).toFixed(2)}%` : '0%',
+        ];
+      });
+
+      const lastDataRow = dataStartRow + data.theoToimDanh.length;
+      styleDataRows(sheet, dataStartRow + 1, lastDataRow, 4, [1, 3]);
+      addTotalRow(sheet, lastDataRow + 1, 'Tổng cộng', [tongSoLuong, '100%'], 4);
     }
 
-    // Sheet 4: Xu hướng (nếu có dữ liệu theo tháng)
+    // ════════════════════════════════════════════════════════════
+    // SHEET 4: XU HƯỚNG
+    // ════════════════════════════════════════════════════════════
     if (data.xuHuong && data.xuHuong.length > 0) {
-      const sheetXuHuong = workbook.addWorksheet('Xu hướng');
-      sheetXuHuong.columns = [
-        { header: 'Tháng', key: 'thang', width: 15 },
-        { header: 'Số đối tượng', key: 'soDoiTuong', width: 20 },
-        { header: 'Số vụ việc', key: 'soVuViec', width: 20 },
+      const sheet = workbook.addWorksheet('Xu hướng');
+      sheet.columns = [
+        { key: 'stt', width: 8 },
+        { key: 'thang', width: 15 },
+        { key: 'soDoiTuong', width: 20 },
+        { key: 'soVuViec', width: 18 },
       ];
 
-      sheetXuHuong.getRow(1).font = { bold: true, size: 12 };
-      sheetXuHuong.getRow(1).fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FF4472C4' },
-      };
-      sheetXuHuong.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      const dataStartRow = addReportTitle(sheet, 'Xu hướng theo tháng', 4, query.tuNgay, query.denNgay);
+      sheet.getRow(dataStartRow).values = ['STT', 'Tháng', 'Số đối tượng', 'Số vụ việc'];
+      styleHeader(sheet, dataStartRow, 4);
 
-      sheetXuHuong.addRows(
-        data.xuHuong.map((item: any) => ({
-          thang: item.thang,
-          soDoiTuong: item.soDoiTuong || 0,
-          soVuViec: item.soVuViec || 0,
-        }))
-      );
+      data.xuHuong.forEach((item: any, index: number) => {
+        const r = dataStartRow + 1 + index;
+        sheet.getRow(r).values = [
+          index + 1,
+          item.thang,
+          item.soDoiTuong ?? 0,
+          item.soVuViec ?? 0,
+        ];
+      });
+
+      styleDataRows(sheet, dataStartRow + 1, dataStartRow + data.xuHuong.length, 4, [1, 3, 4]);
     }
 
-    // Save file
+    // ─── Lưu file ─────────────────────────────────────────────
     const exportsDir = path.join(process.cwd(), 'exports');
     if (!fs.existsSync(exportsDir)) {
       fs.mkdirSync(exportsDir, { recursive: true });
@@ -168,7 +297,7 @@ export class BaoCaoExportService {
     // Xác định loại báo cáo cần xuất
     let data: any;
     let loaiBaoCao = query.loaiBaoCao || 'tong-hop';
-    
+
     if (loaiBaoCao === 'khu-vuc') {
       const baoCao = await this.baoCaoService.baoCaoTheoKhuVuc(query);
       data = { theoKhuVuc: baoCao.data, thoiGian: { tuNgay: query.tuNgay, denNgay: query.denNgay, ngayXuat: new Date().toISOString() } };
@@ -348,7 +477,7 @@ export class BaoCaoExportService {
     // Xác định loại báo cáo cần xuất
     let data: any;
     let loaiBaoCao = query.loaiBaoCao || 'tong-hop';
-    
+
     if (loaiBaoCao === 'khu-vuc') {
       const baoCao = await this.baoCaoService.baoCaoTheoKhuVuc(query);
       data = { theoKhuVuc: baoCao.data, thoiGian: { tuNgay: query.tuNgay, denNgay: query.denNgay, ngayXuat: new Date().toISOString() } };
